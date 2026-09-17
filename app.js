@@ -1258,6 +1258,21 @@
   btnRotateLeft.addEventListener("click", function () { rotateBy(-15); });
   btnRotateRight.addEventListener("click", function () { rotateBy(15); });
   btnResetView.addEventListener("click", resetView);
+
+  // ==================== DOCS OVERLAY ====================
+  const docsOverlay = document.getElementById("docs-overlay");
+  const btnDocs = document.getElementById("btn-docs");
+  const btnDocsClose = document.getElementById("btn-docs-close");
+  function openDocs() { docsOverlay.classList.remove("hidden"); }
+  function closeDocs() { docsOverlay.classList.add("hidden"); }
+  btnDocs.addEventListener("click", openDocs);
+  btnDocsClose.addEventListener("click", closeDocs);
+  docsOverlay.addEventListener("click", function (e) {
+    if (e.target === docsOverlay) closeDocs();
+  });
+  window.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && !docsOverlay.classList.contains("hidden")) closeDocs();
+  });
   btnUndo.addEventListener("click", undo);
   btnRedo.addEventListener("click", redo);
   btnImport.addEventListener("click", onImportClick);

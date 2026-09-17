@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://pixel.timeandtime.online/sitemap.xml
