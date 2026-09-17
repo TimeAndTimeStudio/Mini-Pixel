@@ -53,10 +53,7 @@
           </button>
         </div>
         <div class="row" id="size-row" title="Brush size (shared by pencil &amp; eraser)">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-            <circle cx="12" cy="12" r="4" fill="currentColor"/>
-          </svg>
-          <label for="brush-size-slider" class="sr-only">Brush size</label>
+          <label for="brush-size-slider" id="size-label">Size</label>
           <input type="range" id="brush-size-slider" min="1" max="64" value="1">
           <input type="number" id="brush-size-number" min="1" max="64" value="1" title="Brush size in pixels">
         </div>
@@ -138,6 +135,13 @@
           </button>
         </div>
         <div class="row icon-row">
+          <button id="btn-frame-add" class="icon-btn" title="Add empty frame">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <rect x="4" y="4" width="16" height="16" rx="2" stroke="currentColor" stroke-width="1.6"/>
+              <path d="M12 9v6M9 12h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            </svg>
+            <span class="sr-only">Add empty frame</span>
+          </button>
           <button id="btn-frame-copy" class="icon-btn" title="Copy frame">
             <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
               <rect x="8" y="8" width="12" height="12" rx="1.5" stroke="currentColor" stroke-width="1.6"/>
@@ -158,6 +162,17 @@
             </svg>
             <span class="sr-only">Export all frames</span>
           </button>
+        </div>
+        <div class="row" id="playback-row" title="Play animation">
+          <button id="btn-frame-play" class="icon-btn" title="Play animation">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M7 5l12 7-12 7V5z" fill="currentColor"/>
+            </svg>
+            <span class="sr-only">Play animation</span>
+          </button>
+          <label for="fps-input" class="sr-only">FPS</label>
+          <input type="number" id="fps-input" min="1" max="60" value="12" title="Frames per second">
+          <span id="fps-suffix">fps</span>
         </div>
       </div>
       <div class="divider"></div>

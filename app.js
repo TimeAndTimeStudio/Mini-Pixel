@@ -49,9 +49,12 @@
   const frameLabel = document.getElementById("frame-label");
   const btnFramePrev = document.getElementById("btn-frame-prev");
   const btnFrameNext = document.getElementById("btn-frame-next");
+  const btnFrameAdd = document.getElementById("btn-frame-add");
   const btnFrameCopy = document.getElementById("btn-frame-copy");
   const btnFrameDelete = document.getElementById("btn-frame-delete");
   const btnFrameExport = document.getElementById("btn-frame-export");
+  const btnFramePlay = document.getElementById("btn-frame-play");
+  const fpsInput = document.getElementById("fps-input");
   const btnMirrorX = document.getElementById("btn-mirror-x");
   const btnMirrorY = document.getElementById("btn-mirror-y");
   const btnNew = document.getElementById("btn-new");
@@ -89,6 +92,7 @@
   // applied via a single CSS transform, so they never touch pixel
   // data and getCanvasCoords() only has to invert one matrix.
   function setupCanvas() {
+    stopPlayback();
     const w = state.width;
     const h = state.height;
     state.pixels = createPixels(w, h);
@@ -263,6 +267,7 @@
   }
 
   function startDraw(x, y) {
+    stopPlayback();
     const c0 = getCanvasCoords(x, y);
     const px = c0.x, py = c0.y;
     if (px < 0 || px >= state.width || py < 0 || py >= state.height) return;
@@ -337,11 +342,39 @@
   }
 
   // ==================== POINTER EVENTS (drawing) ====================
+  // Touch strokes are held back briefly before the first pixel is
+  // committed: if a second finger lands within that window it's a
+  // pinch/rotate/pan gesture, not a stroke, and the pending draw is
+  // dropped instead of stamping a stray pixel. A quick single tap
+  // still draws immediately once it lifts, before the window closes.
+  const TOUCH_DRAW_DELAY = 80;
+  let pendingTouch = null;
+  let pendingTouchTimer = null;
+
+  function clearPendingTouch() {
+    if (pendingTouchTimer !== null) { clearTimeout(pendingTouchTimer); pendingTouchTimer = null; }
+    pendingTouch = null;
+  }
+
   function onPointerDown(e) {
     if (e.button !== 0) return;
     // A second touch landing while one is already tracked means a
     // pinch/rotate/pan gesture is starting, not a new stroke.
     if (e.pointerType === "touch" && touchPoints.size >= 1) return;
+
+    if (e.pointerType === "touch") {
+      try { displayCanvas.setPointerCapture(e.pointerId); } catch (err) {}
+      pendingTouch = { pointerId: e.pointerId, x: e.clientX, y: e.clientY };
+      pendingTouchTimer = setTimeout(function () {
+        pendingTouchTimer = null;
+        if (pendingTouch && pendingTouch.pointerId === e.pointerId && touchPoints.size < 2) {
+          state.activePointerId = pendingTouch.pointerId;
+          startDraw(pendingTouch.x, pendingTouch.y);
+        }
+        pendingTouch = null;
+      }, TOUCH_DRAW_DELAY);
+      return;
+    }
 
     state.activePointerId = e.pointerId;
     try { displayCanvas.setPointerCapture(e.pointerId); } catch (err) {}
@@ -349,11 +382,28 @@
   }
 
   function onPointerMove(e) {
+    if (pendingTouch && e.pointerId === pendingTouch.pointerId) {
+      pendingTouch.x = e.clientX;
+      pendingTouch.y = e.clientY;
+    }
     if (state.activePointerId !== null && e.pointerId !== state.activePointerId) return;
     moveDraw(e.clientX, e.clientY);
   }
 
   function onPointerUp(e) {
+    // The touch lifted before the hold-back window elapsed: treat it
+    // as a completed single tap and draw+finish right away, rather
+    // than losing the tap entirely.
+    if (pendingTouch && e.pointerId === pendingTouch.pointerId) {
+      const pt = pendingTouch;
+      clearPendingTouch();
+      if (touchPoints.size < 2) {
+        state.activePointerId = pt.pointerId;
+        startDraw(pt.x, pt.y);
+        endDraw();
+      }
+      return;
+    }
     if (state.activePointerId !== null && e.pointerId !== state.activePointerId) return;
     endDraw();
   }
@@ -412,6 +462,7 @@
     touchPoints.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
     if (touchPoints.size === 2) {
+      clearPendingTouch();
       cancelDraw();
       const pts = Array.from(touchPoints.values());
       // Rotation (and the accompanying zoom) always pivots on the
@@ -793,6 +844,7 @@
     btnFramePrev.disabled = state.currentFrame <= 0;
     btnFrameNext.disabled = state.currentFrame >= state.frames.length - 1;
     btnFrameDelete.disabled = state.frames.length <= 1;
+    btnFramePlay.disabled = state.frames.length <= 1;
   }
 
   // Switches the working buffer to a different frame and gives it a
@@ -809,15 +861,72 @@
   }
 
   function copyFrame() {
+    stopPlayback();
     const dup = new Uint8Array(state.pixels);
     state.frames.splice(state.currentFrame + 1, 0, dup);
     goToFrame(state.currentFrame + 1);
   }
 
+  // Inserts a brand-new blank (fully transparent) frame right after
+  // the current one, leaving every other frame untouched.
+  function addEmptyFrame() {
+    stopPlayback();
+    const blank = createPixels(state.width, state.height);
+    state.frames.splice(state.currentFrame + 1, 0, blank);
+    goToFrame(state.currentFrame + 1);
+  }
+
   function deleteFrame() {
     if (state.frames.length <= 1) return;
+    stopPlayback();
     state.frames.splice(state.currentFrame, 1);
     goToFrame(Math.min(state.currentFrame, state.frames.length - 1));
+  }
+
+  // ==================== ANIMATION PLAYBACK ====================
+  let isPlaying = false;
+  let playTimer = null;
+
+  const PLAY_ICON = '<path d="M7 5l12 7-12 7V5z" fill="currentColor"/>';
+  const PAUSE_ICON = '<rect x="6" y="5" width="4" height="14" fill="currentColor"/><rect x="14" y="5" width="4" height="14" fill="currentColor"/>';
+
+  function getFps() {
+    const v = Math.max(1, Math.min(60, parseInt(fpsInput.value, 10) || 12));
+    return v;
+  }
+
+  function advanceFrame() {
+    const next = (state.currentFrame + 1) % state.frames.length;
+    goToFrame(next);
+  }
+
+  function startPlayback() {
+    if (isPlaying || state.frames.length <= 1) return;
+    isPlaying = true;
+    btnFramePlay.classList.add("playing");
+    btnFramePlay.title = "Pause animation";
+    btnFramePlay.querySelector(".icon").innerHTML = PAUSE_ICON;
+    playTimer = setInterval(advanceFrame, 1000 / getFps());
+  }
+
+  function stopPlayback() {
+    if (!isPlaying) return;
+    isPlaying = false;
+    clearInterval(playTimer);
+    playTimer = null;
+    btnFramePlay.classList.remove("playing");
+    btnFramePlay.title = "Play animation";
+    btnFramePlay.querySelector(".icon").innerHTML = PLAY_ICON;
+  }
+
+  function togglePlayback() {
+    if (isPlaying) stopPlayback(); else startPlayback();
+  }
+
+  function restartPlaybackTimer() {
+    if (!isPlaying) return;
+    clearInterval(playTimer);
+    playTimer = setInterval(advanceFrame, 1000 / getFps());
   }
 
   // Renders one frame's buffer onto an off-screen canvas and returns
@@ -942,11 +1051,18 @@
   btnEraser.addEventListener("click", function () { selectTool("eraser"); });
   btnEyedropper.addEventListener("click", function () { selectTool("eyedropper"); });
   toolbarToggle.addEventListener("click", toggleToolbar);
-  btnFramePrev.addEventListener("click", function () { goToFrame(state.currentFrame - 1); });
-  btnFrameNext.addEventListener("click", function () { goToFrame(state.currentFrame + 1); });
+  btnFramePrev.addEventListener("click", function () { stopPlayback(); goToFrame(state.currentFrame - 1); });
+  btnFrameNext.addEventListener("click", function () { stopPlayback(); goToFrame(state.currentFrame + 1); });
+  btnFrameAdd.addEventListener("click", addEmptyFrame);
   btnFrameCopy.addEventListener("click", copyFrame);
   btnFrameDelete.addEventListener("click", deleteFrame);
-  btnFrameExport.addEventListener("click", exportAnimation);
+  btnFrameExport.addEventListener("click", function () { stopPlayback(); exportAnimation(); });
+  btnFramePlay.addEventListener("click", togglePlayback);
+  fpsInput.addEventListener("change", function () {
+    fpsInput.value = getFps();
+    restartPlaybackTimer();
+  });
+  fpsInput.addEventListener("input", restartPlaybackTimer);
   btnMirrorX.addEventListener("click", toggleMirrorX);
   btnMirrorY.addEventListener("click", toggleMirrorY);
   btnNew.addEventListener("click", createNewCanvas);
