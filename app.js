@@ -1231,6 +1231,7 @@
     const collapsed = toolbar.classList.toggle("collapsed");
     toolbarToggle.setAttribute("data-collapsed", collapsed ? "true" : "false");
     toolbarToggle.title = collapsed ? "Expand toolbar" : "Collapse toolbar";
+    document.getElementById("app").classList.toggle("sidebar-open", !collapsed);
   }
 
   // ==================== EVENT BINDINGS ====================
