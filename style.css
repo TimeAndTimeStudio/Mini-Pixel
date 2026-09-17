@@ -54,6 +54,14 @@ button:focus-visible, input:focus-visible, select:focus-visible{
 .topbar-divider{width:1px;align-self:stretch;background:var(--line);flex-shrink:0;margin:2px 2px;}
 #topbar #file-input{display:none;}
 
+/* Hide the native spinner arrows on number inputs (brush size, W/H,
+   fps) on every screen size — not needed and just adds clutter. */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button{
+  -webkit-appearance:none;margin:0;
+}
+input[type="number"]{-moz-appearance:textfield;appearance:textfield;}
+
 /* "Canvas creation" group (New canvas + W/H). On mobile it lives in
    the sidebar next to the size controls it belongs with; on desktop
    app.js moves the same DOM node into the topbar here, so styling it
