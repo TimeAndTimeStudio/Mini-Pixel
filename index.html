@@ -9,6 +9,50 @@
 <body>
   <div id="app">
     <div id="workspace">
+      <div id="topbar">
+        <div class="row icon-row">
+          <button id="btn-undo" class="icon-btn" title="Undo (Ctrl+Z)">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M8 7L4 11l4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M4 11h10a5 5 0 0 1 0 10h-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            </svg>
+            <span class="sr-only">Undo</span>
+          </button>
+          <button id="btn-redo" class="icon-btn" title="Redo (Ctrl+Y)">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M16 7l4 4-4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M20 11H10a5 5 0 0 0 0 10h3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            </svg>
+            <span class="sr-only">Redo</span>
+          </button>
+          <span class="topbar-divider"></span>
+          <button id="btn-new" class="icon-btn" title="New canvas">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M6 3h9l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+              <path d="M12 11v6M9 14h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            </svg>
+            <span class="sr-only">New canvas</span>
+          </button>
+          <span class="topbar-divider"></span>
+          <button id="btn-import" class="icon-btn" title="Import PNG">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M12 3v12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+              <path d="M7.5 10L12 14.5 16.5 10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            </svg>
+            <span class="sr-only">Import</span>
+          </button>
+          <button id="btn-export" class="icon-btn" title="Export PNG">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M12 15V3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+              <path d="M7.5 7.5L12 3l4.5 4.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            </svg>
+            <span class="sr-only">Export</span>
+          </button>
+          <input type="file" id="file-input" accept="image/png">
+        </div>
+      </div>
       <div id="canvas-wrapper">
         <canvas id="display-canvas"></canvas>
       </div>
@@ -56,29 +100,6 @@
           <label for="brush-size-number" id="size-label">Size</label>
           <input type="number" id="brush-size-number" min="1" max="64" value="1" title="Brush size in pixels">
         </div>
-      </div>
-      <div class="divider"></div>
-
-      <div class="group" id="io-group">
-        <div class="row icon-row">
-          <button id="btn-import" class="icon-btn" title="Import PNG">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <path d="M12 3v12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-              <path d="M7.5 10L12 14.5 16.5 10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-            </svg>
-            <span class="sr-only">Import</span>
-          </button>
-          <button id="btn-export" class="icon-btn" title="Export PNG">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <path d="M12 15V3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-              <path d="M7.5 7.5L12 3l4.5 4.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-            </svg>
-            <span class="sr-only">Export</span>
-          </button>
-        </div>
-        <input type="file" id="file-input" accept="image/png">
       </div>
       <div class="divider"></div>
 
@@ -164,15 +185,6 @@
         <div class="row">
           <label for="input-height">H</label>
           <input type="number" id="input-height" value="64" min="1" max="2048">
-        </div>
-        <div class="row icon-row">
-          <button id="btn-new" class="icon-btn" title="New canvas">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <path d="M6 3h9l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
-              <path d="M12 11v6M9 14h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-            </svg>
-            <span class="sr-only">New canvas</span>
-          </button>
         </div>
       </div>
       <div class="divider"></div>
@@ -270,26 +282,6 @@
               <path d="M9 9l6 6M15 9l-6 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
             </svg>
             <span class="sr-only">Reset view</span>
-          </button>
-        </div>
-      </div>
-      <div class="divider"></div>
-
-      <div class="group" id="history-group">
-        <div class="row icon-row">
-          <button id="btn-undo" class="icon-btn" title="Undo (Ctrl+Z)">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <path d="M8 7L4 11l4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M4 11h10a5 5 0 0 1 0 10h-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-            </svg>
-            <span class="sr-only">Undo</span>
-          </button>
-          <button id="btn-redo" class="icon-btn" title="Redo (Ctrl+Y)">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <path d="M16 7l4 4-4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M20 11H10a5 5 0 0 0 0 10h3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-            </svg>
-            <span class="sr-only">Redo</span>
           </button>
         </div>
       </div>

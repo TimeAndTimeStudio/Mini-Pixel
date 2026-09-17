@@ -521,6 +521,7 @@
     const dist = touchDist(pts[0], pts[1]);
     const angle = touchAngle(pts[0], pts[1]);
     const mid = touchMid(pts[0], pts[1]);
+    const rect = canvasWrapper.getBoundingClientRect();
 
     let newZoom = gesture.startZoom * (dist / gesture.startDist);
     newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newZoom));
@@ -529,8 +530,8 @@
     const offset = toScreenOffset(gesture.anchorLx, gesture.anchorLy, newZoom, newRotation);
     state.zoom = newZoom;
     state.rotation = newRotation;
-    state.panX = mid.x - offset.x;
-    state.panY = mid.y - offset.y;
+    state.panX = (mid.x - rect.left) - offset.x;
+    state.panY = (mid.y - rect.top) - offset.y;
     applyTransform();
   }
 
