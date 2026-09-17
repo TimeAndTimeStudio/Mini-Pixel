@@ -32,15 +32,15 @@ button:focus-visible, input:focus-visible, select:focus-visible{
 }
 
 /* Top bar: global actions (undo/redo, new, import/export) as
-   icon-only buttons, matching the sidebar's icon-btn look. */
+   icon-only buttons, matching the sidebar's icon-btn look. Scrolls
+   sideways any time its content is wider than the available space —
+   e.g. the side toolbar is open, the window is narrow, or the export
+   filename field is long — instead of clipping or covering buttons. */
 #topbar{
   display:flex;align-items:center;flex-shrink:0;
   padding:6px 10px;background:var(--ink-900);border-bottom:1px solid var(--line);
-  overflow-x:hidden;overflow-y:hidden;
+  overflow-x:auto;overflow-y:hidden;
 }
-/* Only scrollable while the side toolbar is open — that's the only
-   time the workspace gets narrow enough for the buttons not to fit. */
-#app.sidebar-open #topbar{overflow-x:auto;}
 #app.sidebar-open #bottombar{overflow-x:auto;}
 #topbar .row{width:auto;display:flex;align-items:center;}
 #topbar .icon-btn{width:30px;height:30px;}

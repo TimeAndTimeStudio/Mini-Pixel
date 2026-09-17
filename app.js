@@ -60,6 +60,7 @@
   const sizeGroup = document.getElementById("size-group");
   const sizeGroupEndDivider = document.getElementById("size-group-end-divider");
   const topbarCanvasAnchor = document.getElementById("topbar-canvas-anchor");
+  const topbarCanvasAnchorDivider = document.getElementById("topbar-canvas-anchor-divider");
   const zoomSelect = document.getElementById("zoom-select");
   const btnRotateLeft = document.getElementById("btn-rotate-left");
   const btnRotateRight = document.getElementById("btn-rotate-right");
@@ -1407,6 +1408,12 @@
   // stays put whether or not #size-group itself is currently there —
   // so there's never more than one divider line in that spot,
   // regardless of screen size.
+  //
+  // The topbar has the mirror problem: its anchor span is flanked by
+  // a divider on each side, which is right when #size-group is
+  // sitting there (desktop) but leaves the anchor empty with two
+  // dividers touching on mobile. So the trailing one of that pair is
+  // hidden whenever the group isn't actually in the topbar.
   const desktopLayoutQuery = window.matchMedia("(min-width: 481px)");
   function placeCanvasCreateGroup(isDesktop) {
     if (isDesktop) {
@@ -1418,6 +1425,7 @@
         sizeGroupEndDivider.parentElement.insertBefore(sizeGroup, sizeGroupEndDivider);
       }
     }
+    topbarCanvasAnchorDivider.style.display = isDesktop ? "" : "none";
   }
   placeCanvasCreateGroup(desktopLayoutQuery.matches);
   desktopLayoutQuery.addEventListener("change", function (e) {
