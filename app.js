@@ -66,6 +66,11 @@
   const btnImport = document.getElementById("btn-import");
   const btnExport = document.getElementById("btn-export");
   const fileInput = document.getElementById("file-input");
+  const projectSelect = document.getElementById("project-select");
+  const projectName = document.getElementById("project-name");
+  const btnProjectSave = document.getElementById("btn-project-save");
+  const btnProjectLoad = document.getElementById("btn-project-load");
+  const btnProjectDelete = document.getElementById("btn-project-delete");
   const canvasWrapper = document.getElementById("canvas-wrapper");
   const statusSize = document.getElementById("status-size");
   const statusPixel = document.getElementById("status-pixel");
@@ -90,12 +95,17 @@
   // pixel. Panning, zooming and rotating are all pure view transforms
   // applied via a single CSS transform, so they never touch pixel
   // data and getCanvasCoords() only has to invert one matrix.
-  function setupCanvas() {
+  function setupCanvas(framesOverride) {
     stopPlayback();
     const w = state.width;
     const h = state.height;
-    state.pixels = createPixels(w, h);
-    state.frames = [state.pixels];
+    if (framesOverride && framesOverride.length) {
+      state.frames = framesOverride;
+      state.pixels = state.frames[0];
+    } else {
+      state.pixels = createPixels(w, h);
+      state.frames = [state.pixels];
+    }
     state.currentFrame = 0;
 
     displayCanvas.width = w;
@@ -785,6 +795,131 @@
     applyTransform();
   }
 
+  // ==================== PROJECTS (save/load via localStorage) ====================
+  const PROJECTS_STORAGE_KEY = "pixelDrawProjects";
+
+  // Uint8Array <-> base64, chunked so a big canvas doesn't blow the
+  // call stack on String.fromCharCode.apply.
+  function bytesToBase64(bytes) {
+    let binary = "";
+    const chunkSize = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+    }
+    return btoa(binary);
+  }
+
+  function base64ToBytes(b64) {
+    const binary = atob(b64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+  }
+
+  function loadProjectsIndex() {
+    try {
+      return JSON.parse(localStorage.getItem(PROJECTS_STORAGE_KEY) || "{}");
+    } catch (err) {
+      return {};
+    }
+  }
+
+  function saveProjectsIndex(idx) {
+    localStorage.setItem(PROJECTS_STORAGE_KEY, JSON.stringify(idx));
+  }
+
+  function refreshProjectSelect(selectName) {
+    const idx = loadProjectsIndex();
+    const names = Object.keys(idx).sort(function (a, b) { return a.localeCompare(b); });
+    projectSelect.innerHTML = "";
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = "\u2014 Projects \u2014";
+    projectSelect.appendChild(placeholder);
+    names.forEach(function (name) {
+      const opt = document.createElement("option");
+      opt.value = name;
+      opt.textContent = name;
+      projectSelect.appendChild(opt);
+    });
+    projectSelect.value = names.indexOf(selectName) !== -1 ? selectName : "";
+  }
+
+  function serializeProject() {
+    return {
+      width: state.width,
+      height: state.height,
+      frames: state.frames.map(bytesToBase64),
+      brushSize: state.brushSize,
+      color: state.color,
+      mirrorX: state.mirrorX,
+      mirrorY: state.mirrorY,
+      savedAt: Date.now(),
+    };
+  }
+
+  function saveProject() {
+    const name = projectName.value.trim();
+    if (!name) { alert("Please enter a project name first."); return; }
+
+    const idx = loadProjectsIndex();
+    idx[name] = serializeProject();
+    try {
+      saveProjectsIndex(idx);
+    } catch (err) {
+      alert("Couldn't save the project (storage may be full): " + err.message);
+      return;
+    }
+    refreshProjectSelect(name);
+  }
+
+  function loadProject(name) {
+    if (!name) return;
+    const idx = loadProjectsIndex();
+    const proj = idx[name];
+    if (!proj) return;
+
+    stopPlayback();
+    state.width = proj.width;
+    state.height = proj.height;
+    state.brushSize = proj.brushSize || 1;
+    state.mirrorX = !!proj.mirrorX;
+    state.mirrorY = !!proj.mirrorY;
+
+    const frames = proj.frames.map(base64ToBytes);
+
+    inputWidth.value = state.width;
+    inputHeight.value = state.height;
+    setBrushSize(state.brushSize, true);
+    btnMirrorX.classList.toggle("active", state.mirrorX);
+    btnMirrorY.classList.toggle("active", state.mirrorY);
+
+    if (proj.color) {
+      syncWheelFromRgb(proj.color);
+      applyColor(proj.color);
+    }
+
+    setupCanvas(frames);
+    projectName.value = name;
+  }
+
+  function deleteProject(name) {
+    if (!name) return;
+    if (!confirm('Delete project "' + name + '"? This can\'t be undone.')) return;
+    const idx = loadProjectsIndex();
+    delete idx[name];
+    saveProjectsIndex(idx);
+    refreshProjectSelect();
+    projectName.value = "";
+  }
+
+  btnProjectSave.addEventListener("click", saveProject);
+  btnProjectLoad.addEventListener("click", function () { loadProject(projectSelect.value); });
+  btnProjectDelete.addEventListener("click", function () { deleteProject(projectSelect.value); });
+  projectSelect.addEventListener("change", function () {
+    if (projectSelect.value) projectName.value = projectSelect.value;
+  });
+
   // ==================== PNG IMPORT ====================
   function onImportClick() {
     fileInput.click();
@@ -1130,6 +1265,7 @@
   syncWheelFromRgb(state.color);
   colorSwatch.style.background = rgbToHex(state.color.r, state.color.g, state.color.b);
   setupCanvas();
+  refreshProjectSelect();
 
   window.addEventListener("resize", function () {
     // Keep the canvas roughly centered as the workspace is resized,

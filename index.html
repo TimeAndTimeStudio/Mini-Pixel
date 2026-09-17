@@ -82,6 +82,43 @@
       </div>
       <div class="divider"></div>
 
+      <div class="group" id="project-group">
+        <div class="row">
+          <label for="project-select" class="sr-only">Saved projects</label>
+          <select id="project-select" title="Saved projects">
+            <option value="">— Projects —</option>
+          </select>
+        </div>
+        <div class="row">
+          <label for="project-name" class="sr-only">Project name</label>
+          <input type="text" id="project-name" placeholder="Project name" maxlength="40" title="Project name">
+        </div>
+        <div class="row icon-row">
+          <button id="btn-project-save" class="icon-btn" title="Save project">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M5 4h11l3 3v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+              <path d="M8 4v5h7V4" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+              <rect x="7.5" y="14" width="9" height="6" stroke="currentColor" stroke-width="1.6"/>
+            </svg>
+            <span class="sr-only">Save project</span>
+          </button>
+          <button id="btn-project-load" class="icon-btn" title="Load selected project">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M3 7a1 1 0 0 1 1-1h4l2 2h9a1 1 0 0 1 1 1v1H4" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+              <path d="M3 10l1.5 9a1 1 0 0 0 1 .8h11a1 1 0 0 0 1-.8L20 10H3z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+            </svg>
+            <span class="sr-only">Load project</span>
+          </button>
+          <button id="btn-project-delete" class="icon-btn" title="Delete selected project">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M5 7h14M9.5 7V5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v2M7 7l1 13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span class="sr-only">Delete project</span>
+          </button>
+        </div>
+      </div>
+      <div class="divider"></div>
+
       <div class="group" id="color-group">
         <div id="wheel-wrap">
           <canvas id="color-wheel" width="152" height="152"></canvas>
