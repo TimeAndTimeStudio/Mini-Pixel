@@ -105,12 +105,6 @@ button:focus-visible, input:focus-visible, select:focus-visible{
   overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;
 }
 
-.brand{
-  display:flex;align-items:center;justify-content:center;
-  color:var(--accent-strong);flex-shrink:0;padding:2px 0 4px;
-}
-.brand .icon{width:19px;height:19px;}
-
 .divider{height:1px;width:100%;background:var(--line);flex-shrink:0;}
 
 .group{display:flex;flex-direction:column;gap:5px;min-width:0;flex-shrink:0;align-items:center;}
@@ -167,8 +161,18 @@ button.icon-btn .icon{width:16px;height:16px;}
   width:13px;height:13px;border-radius:50%;background:var(--accent);
   border:2px solid var(--accent-ink);cursor:pointer;
 }
-#brush-size-value{
-  width:20px;flex-shrink:0;text-align:right;font-size:11px;color:var(--text-dim);
+#brush-size-number{
+  width:34px;flex-shrink:0;padding:4px 2px;border:1px solid var(--ink-600);border-radius:6px;
+  background:var(--ink-800);color:var(--text);font-size:11px;text-align:center;
+}
+
+/* ---------- Frame navigation (animation) ---------- */
+#frame-nav-row{justify-content:center;}
+#frame-nav-row .icon-btn{width:26px;height:26px;}
+#frame-nav-row .icon-btn .icon{width:12px;height:12px;}
+#frame-label{
+  flex:1;text-align:center;font-size:11px;color:var(--text-dim);
+  min-width:0;font-variant-numeric:tabular-nums;
 }
 
 #wheel-wrap{
@@ -233,7 +237,6 @@ label{font-size:11px;color:var(--text-dim);flex-shrink:0;}
   #toolbar-inner{padding:7px 6px;gap:7px;}
   button.icon-btn{width:30px;height:30px;}
   button.icon-btn .icon{width:14px;height:14px;}
-  .brand .icon{width:16px;height:16px;}
   #wheel-wrap{width:100%;}
   #color-wheel{width:100%;height:auto;}
 }

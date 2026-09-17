@@ -27,12 +27,6 @@
       </button>
     <aside id="toolbar" class="collapsed">
       <div id="toolbar-inner">
-      <span class="brand" title="Pixel Draw">
-        <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-          <path d="M12 2 L22 12 L12 22 L2 12 Z" fill="currentColor"/>
-        </svg>
-      </span>
-
       <div class="group" id="tool-group">
         <div class="row icon-row">
           <button id="btn-pencil" class="tool-btn icon-btn active" title="Pencil (P)">
@@ -63,8 +57,8 @@
             <circle cx="12" cy="12" r="4" fill="currentColor"/>
           </svg>
           <label for="brush-size-slider" class="sr-only">Brush size</label>
-          <input type="range" id="brush-size-slider" min="1" max="16" value="1">
-          <span id="brush-size-value">1px</span>
+          <input type="range" id="brush-size-slider" min="1" max="64" value="1">
+          <input type="number" id="brush-size-number" min="1" max="64" value="1" title="Brush size in pixels">
         </div>
       </div>
       <div class="divider"></div>
@@ -122,6 +116,47 @@
               <path d="M12 11v6M9 14h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
             </svg>
             <span class="sr-only">New canvas</span>
+          </button>
+        </div>
+      </div>
+      <div class="divider"></div>
+
+      <div class="group" id="frames-group">
+        <div class="row" id="frame-nav-row">
+          <button id="btn-frame-prev" class="icon-btn" title="Previous frame">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span class="sr-only">Previous frame</span>
+          </button>
+          <span id="frame-label" title="Current frame">1/1</span>
+          <button id="btn-frame-next" class="icon-btn" title="Next frame">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span class="sr-only">Next frame</span>
+          </button>
+        </div>
+        <div class="row icon-row">
+          <button id="btn-frame-copy" class="icon-btn" title="Copy frame">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <rect x="8" y="8" width="12" height="12" rx="1.5" stroke="currentColor" stroke-width="1.6"/>
+              <path d="M5.5 15.5H4.5a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            </svg>
+            <span class="sr-only">Copy frame</span>
+          </button>
+          <button id="btn-frame-delete" class="icon-btn" title="Delete frame">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M5 7h14M9.5 7V5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v2M7 7l1 13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span class="sr-only">Delete frame</span>
+          </button>
+          <button id="btn-frame-export" class="icon-btn" title="Export all frames to a folder">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M3 7a1 1 0 0 1 1-1h4l2 2h9a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+              <path d="M12 11v6M9.5 14.5L12 12l2.5 2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span class="sr-only">Export all frames</span>
           </button>
         </div>
       </div>

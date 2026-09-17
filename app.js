@@ -6,6 +6,8 @@
     width: 64,
     height: 64,
     pixels: null,
+    frames: [],
+    currentFrame: 0,
     tool: "pencil",
     lastPaintTool: "pencil", // remembers pencil/eraser so the eyedropper can hand control back
     color: { r: 94, g: 234, b: 212, a: 255 },
@@ -41,9 +43,15 @@
   const btnEraser = document.getElementById("btn-eraser");
   const btnEyedropper = document.getElementById("btn-eyedropper");
   const brushSizeSlider = document.getElementById("brush-size-slider");
-  const brushSizeValue = document.getElementById("brush-size-value");
+  const brushSizeNumber = document.getElementById("brush-size-number");
   const toolbar = document.getElementById("toolbar");
   const toolbarToggle = document.getElementById("toolbar-toggle");
+  const frameLabel = document.getElementById("frame-label");
+  const btnFramePrev = document.getElementById("btn-frame-prev");
+  const btnFrameNext = document.getElementById("btn-frame-next");
+  const btnFrameCopy = document.getElementById("btn-frame-copy");
+  const btnFrameDelete = document.getElementById("btn-frame-delete");
+  const btnFrameExport = document.getElementById("btn-frame-export");
   const btnMirrorX = document.getElementById("btn-mirror-x");
   const btnMirrorY = document.getElementById("btn-mirror-y");
   const btnNew = document.getElementById("btn-new");
@@ -84,6 +92,8 @@
     const w = state.width;
     const h = state.height;
     state.pixels = createPixels(w, h);
+    state.frames = [state.pixels];
+    state.currentFrame = 0;
 
     displayCanvas.width = w;
     displayCanvas.height = h;
@@ -100,6 +110,7 @@
     saveState();
 
     statusSize.innerHTML = "Canvas: <b>" + w + " \u00d7 " + h + "</b>";
+    updateFrameLabel();
     render();
   }
 
@@ -722,6 +733,8 @@
 
         state.pixels = createPixels(state.width, state.height);
         copyPixels(imgData.data, state.pixels);
+        state.frames = [state.pixels];
+        state.currentFrame = 0;
 
         displayCanvas.width = state.width;
         displayCanvas.height = state.height;
@@ -735,6 +748,7 @@
         saveState();
 
         statusSize.innerHTML = "Canvas: <b>" + state.width + " \u00d7 " + state.height + "</b>";
+        updateFrameLabel();
         render();
       };
       img.onerror = function () {
@@ -773,6 +787,103 @@
     }, "image/png");
   }
 
+  // ==================== FRAMES (ANIMATION) ====================
+  function updateFrameLabel() {
+    frameLabel.textContent = (state.currentFrame + 1) + "/" + state.frames.length;
+    btnFramePrev.disabled = state.currentFrame <= 0;
+    btnFrameNext.disabled = state.currentFrame >= state.frames.length - 1;
+    btnFrameDelete.disabled = state.frames.length <= 1;
+  }
+
+  // Switches the working buffer to a different frame and gives it a
+  // fresh undo history — history isn't shared across frames.
+  function goToFrame(index) {
+    if (index < 0 || index >= state.frames.length) return;
+    state.currentFrame = index;
+    state.pixels = state.frames[index];
+    state.undoStack = [];
+    state.redoStack = [];
+    saveState();
+    updateFrameLabel();
+    render();
+  }
+
+  function copyFrame() {
+    const dup = new Uint8Array(state.pixels);
+    state.frames.splice(state.currentFrame + 1, 0, dup);
+    goToFrame(state.currentFrame + 1);
+  }
+
+  function deleteFrame() {
+    if (state.frames.length <= 1) return;
+    state.frames.splice(state.currentFrame, 1);
+    goToFrame(Math.min(state.currentFrame, state.frames.length - 1));
+  }
+
+  // Renders one frame's buffer onto an off-screen canvas and returns
+  // it as a PNG blob (transparency intact, same as the single-frame
+  // export).
+  function frameToBlob(frameData) {
+    return new Promise(function (resolve) {
+      const tmpCanvas = document.createElement("canvas");
+      tmpCanvas.width = state.width;
+      tmpCanvas.height = state.height;
+      const tmpCtx = tmpCanvas.getContext("2d");
+      const imgData = tmpCtx.createImageData(state.width, state.height);
+      imgData.data.set(frameData);
+      tmpCtx.putImageData(imgData, 0, 0);
+      tmpCanvas.toBlob(resolve, "image/png");
+    });
+  }
+
+  function frameFileName(index) {
+    return "frame_" + String(index + 1).padStart(3, "0") + ".png";
+  }
+
+  // Exports every frame as a numbered PNG. Where the browser supports
+  // the File System Access API, the person picks a real folder and
+  // the files are written straight into it; otherwise each frame is
+  // downloaded individually (they land in the browser's default
+  // downloads location instead).
+  async function exportAnimation() {
+    if (!state.frames.length) return;
+
+    if ("showDirectoryPicker" in window) {
+      let dirHandle;
+      try {
+        dirHandle = await window.showDirectoryPicker();
+      } catch (err) {
+        return; // person cancelled the picker
+      }
+      try {
+        for (let i = 0; i < state.frames.length; i++) {
+          const blob = await frameToBlob(state.frames[i]);
+          const fileHandle = await dirHandle.getFileHandle(frameFileName(i), { create: true });
+          const writable = await fileHandle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+        }
+        alert("Exported " + state.frames.length + " frame(s) to the selected folder.");
+      } catch (err) {
+        alert("Couldn't finish exporting to that folder: " + err.message);
+      }
+    } else {
+      for (let i = 0; i < state.frames.length; i++) {
+        const blob = await frameToBlob(state.frames[i]);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = frameFileName(i);
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        await new Promise(function (r) { setTimeout(r, 150); });
+      }
+      alert("Your browser can't pick a folder directly, so " + state.frames.length + " frame(s) were downloaded individually instead.");
+    }
+  }
+
   // ==================== KEYBOARD SHORTCUTS ====================
   function onKeyDown(e) {
     if (e.target.tagName === "INPUT") return;
@@ -806,10 +917,15 @@
   }
 
   // ==================== BRUSH SIZE (shared: pencil + eraser) ====================
-  function onBrushSizeChange(e) {
-    state.brushSize = parseInt(e.target.value, 10) || 1;
-    brushSizeValue.textContent = state.brushSize + "px";
+  function setBrushSize(v) {
+    v = Math.max(1, Math.min(64, parseInt(v, 10) || 1));
+    state.brushSize = v;
+    brushSizeSlider.value = v;
+    brushSizeNumber.value = v;
   }
+  brushSizeSlider.addEventListener("input", function (e) { setBrushSize(e.target.value); });
+  brushSizeNumber.addEventListener("input", function (e) { setBrushSize(e.target.value); });
+  brushSizeNumber.addEventListener("blur", function () { setBrushSize(brushSizeNumber.value); });
 
   // ==================== TOOLBAR COLLAPSE/EXPAND ====================
   // Toolbar starts collapsed to a slim strip; the toggle only ever
@@ -825,8 +941,12 @@
   btnPencil.addEventListener("click", function () { selectTool("pencil"); });
   btnEraser.addEventListener("click", function () { selectTool("eraser"); });
   btnEyedropper.addEventListener("click", function () { selectTool("eyedropper"); });
-  brushSizeSlider.addEventListener("input", onBrushSizeChange);
   toolbarToggle.addEventListener("click", toggleToolbar);
+  btnFramePrev.addEventListener("click", function () { goToFrame(state.currentFrame - 1); });
+  btnFrameNext.addEventListener("click", function () { goToFrame(state.currentFrame + 1); });
+  btnFrameCopy.addEventListener("click", copyFrame);
+  btnFrameDelete.addEventListener("click", deleteFrame);
+  btnFrameExport.addEventListener("click", exportAnimation);
   btnMirrorX.addEventListener("click", toggleMirrorX);
   btnMirrorY.addEventListener("click", toggleMirrorY);
   btnNew.addEventListener("click", createNewCanvas);
