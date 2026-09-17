@@ -465,16 +465,19 @@
   // stays put as the view scales in/out.
   canvasWrapper.addEventListener("wheel", function (e) {
     e.preventDefault();
-    const rect = canvasWrapper.getBoundingClientRect();
-    const { lx, ly } = toLocal(e.clientX, e.clientY, state.panX, state.panY, state.zoom, state.rotation);
-
     const factor = Math.pow(1.0016, -e.deltaY);
     const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, state.zoom * factor));
 
-    const offset = toScreenOffset(lx, ly, newZoom, state.rotation);
+    // Pivot on the canvas's own center (same as the two-finger touch
+    // gesture) rather than the cursor position, so the view scales in
+    // place instead of drifting toward wherever the mouse happens to be.
+    const offset = toScreenOffset(state.width / 2, state.height / 2, state.zoom, state.rotation);
+    const screenX = state.panX + offset.x;
+    const screenY = state.panY + offset.y;
+    const newOffset = toScreenOffset(state.width / 2, state.height / 2, newZoom, state.rotation);
     state.zoom = newZoom;
-    state.panX = (e.clientX - rect.left) - offset.x;
-    state.panY = (e.clientY - rect.top) - offset.y;
+    state.panX = screenX - newOffset.x;
+    state.panY = screenY - newOffset.y;
     applyTransform();
   }, { passive: false });
 
@@ -495,9 +498,14 @@
       clearPendingTouch();
       cancelDraw();
       const pts = Array.from(touchPoints.values());
-      // Rotation (and the accompanying zoom) always pivots on the
-      // canvas's own center point — not wherever the fingers land —
-      // so the paper spins in place instead of swinging around.
+      const mid = touchMid(pts[0], pts[1]);
+      // Pivot always stays on the canvas's own center — not the
+      // fingers — so the canvas spins/scales in place. To avoid a
+      // jump the instant the second finger lands, we don't snap pan
+      // to the finger midpoint; we only track how far the midpoint
+      // moves from here on and slide the (still center-pivoted) view
+      // by that same delta.
+      const offset0 = toScreenOffset(state.width / 2, state.height / 2, state.zoom, state.rotation);
       gesture = {
         startDist: touchDist(pts[0], pts[1]),
         startAngle: touchAngle(pts[0], pts[1]),
@@ -505,6 +513,10 @@
         startRotation: state.rotation,
         anchorLx: state.width / 2,
         anchorLy: state.height / 2,
+        startMidX: mid.x,
+        startMidY: mid.y,
+        startScreenX: state.panX + offset0.x,
+        startScreenY: state.panY + offset0.y,
       };
     }
   });
@@ -521,17 +533,18 @@
     const dist = touchDist(pts[0], pts[1]);
     const angle = touchAngle(pts[0], pts[1]);
     const mid = touchMid(pts[0], pts[1]);
-    const rect = canvasWrapper.getBoundingClientRect();
 
     let newZoom = gesture.startZoom * (dist / gesture.startDist);
     newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newZoom));
     const newRotation = gesture.startRotation + (angle - gesture.startAngle);
 
     const offset = toScreenOffset(gesture.anchorLx, gesture.anchorLy, newZoom, newRotation);
+    const targetScreenX = gesture.startScreenX + (mid.x - gesture.startMidX);
+    const targetScreenY = gesture.startScreenY + (mid.y - gesture.startMidY);
     state.zoom = newZoom;
     state.rotation = newRotation;
-    state.panX = (mid.x - rect.left) - offset.x;
-    state.panY = (mid.y - rect.top) - offset.y;
+    state.panX = targetScreenX - offset.x;
+    state.panY = targetScreenY - offset.y;
     applyTransform();
   }
 
