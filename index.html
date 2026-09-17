@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Pixel Draw</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <div id="toolbar">
+      <span class="brand">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M12 2 L22 12 L12 22 L2 12 Z" fill="currentColor"/>
+        </svg>
+        Pixel Draw
+      </span>
+      <div class="divider"></div>
+
+      <div id="tool-group">
+        <button id="btn-pencil" class="tool-btn active" title="Pencil (P)">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M3 21l3.6-.9c.4-.1.8-.3 1.1-.6L19.4 8.2c.8-.8.8-2 0-2.8l-.8-.8c-.8-.8-2-.8-2.8 0L4.5 15.3c-.3.3-.5.7-.6 1.1L3 21z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+            <path d="M14.5 6.5l3 3" stroke="currentColor" stroke-width="1.6"/>
+          </svg>
+          Pencil
+        </button>
+        <button id="btn-eraser" class="tool-btn" title="Eraser (E)">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M18.5 3.5l2 2c.6.6.6 1.5 0 2.1L9.7 18.4H5.1L3 16.3v-1.4L14.4 3.5c.6-.6 1.5-.6 2.1 0z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+            <path d="M4 20.5h9.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+          </svg>
+          Eraser
+        </button>
+      </div>
+      <div class="divider"></div>
+
+      <div id="color-group">
+        <div id="color-swatch-wrap" title="Color">
+          <input type="color" id="color-picker" value="#5eead4">
+        </div>
+      </div>
+      <div class="divider"></div>
+
+      <div id="mirror-group">
+        <button id="btn-mirror-x" class="mirror-btn" title="Mirror X (M)">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M12 3v18" stroke="currentColor" stroke-width="1.6" stroke-dasharray="2.5 2.5"/>
+            <path d="M5 8L2 12l3 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M19 8l3 4-3 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Mirror X
+        </button>
+        <button id="btn-mirror-y" class="mirror-btn" title="Mirror Y (N)">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M3 12h18" stroke="currentColor" stroke-width="1.6" stroke-dasharray="2.5 2.5"/>
+            <path d="M8 5L12 2l4 3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M8 19l4 3 4-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Mirror Y
+        </button>
+      </div>
+      <div class="divider"></div>
+
+      <div id="size-group">
+        <label for="input-width">W</label>
+        <input type="number" id="input-width" value="64" min="1" max="2048">
+        <label for="input-height">H</label>
+        <input type="number" id="input-height" value="64" min="1" max="2048">
+        <button id="btn-new">New</button>
+      </div>
+      <div class="divider"></div>
+
+      <div id="zoom-group">
+        <label for="zoom-select">Zoom</label>
+        <select id="zoom-select">
+          <option value="1">1×</option>
+          <option value="2">2×</option>
+          <option value="4" selected>4×</option>
+          <option value="8">8×</option>
+          <option value="16">16×</option>
+          <option value="32">32×</option>
+          <option value="64">64×</option>
+        </select>
+      </div>
+      <div class="divider"></div>
+
+      <div id="history-group">
+        <button id="btn-undo" title="Undo (Ctrl+Z)">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M8 7L4 11l4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M4 11h10a5 5 0 0 1 0 10h-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+          </svg>
+          Undo
+        </button>
+        <button id="btn-redo" title="Redo (Ctrl+Y)">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M16 7l4 4-4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M20 11H10a5 5 0 0 0 0 10h3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+          </svg>
+          Redo
+        </button>
+      </div>
+      <div class="divider"></div>
+
+      <div id="io-group">
+        <button id="btn-import" title="Import PNG">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M12 3v12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            <path d="M7.5 10L12 14.5 16.5 10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+          </svg>
+          Import
+        </button>
+        <button id="btn-export" title="Export PNG">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M12 15V3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            <path d="M7.5 7.5L12 3l4.5 4.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+          </svg>
+          Export
+        </button>
+        <input type="file" id="file-input" accept="image/png">
+      </div>
+    </div>
+
+    <div id="canvas-wrapper">
+      <canvas id="display-canvas"></canvas>
+    </div>
+
+    <div id="statusbar">
+      <span id="status-size">Canvas: <b>64 × 64</b></span>
+      <span id="status-pixel">—</span>
+      <span id="status-zoom">Zoom: <b>4×</b> · Middle-drag to pan</span>
+    </div>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
