@@ -68,6 +68,7 @@
   const btnRedo = document.getElementById("btn-redo");
   const btnImport = document.getElementById("btn-import");
   const btnExport = document.getElementById("btn-export");
+  const exportFilenameInput = document.getElementById("export-filename");
   const fileInput = document.getElementById("file-input");
   const projectSelect = document.getElementById("project-select");
   const projectName = document.getElementById("project-name");
@@ -1031,6 +1032,15 @@
   }
 
   // ==================== PNG EXPORT ====================
+  // Shared by the single-frame PNG export and the animation ZIP
+  // export. Reads the name field, strips characters that aren't safe
+  // in a filename, and falls back to a default when it's empty.
+  function getExportBaseName(fallback) {
+    const raw = exportFilenameInput.value.trim();
+    const cleaned = raw.replace(/[\\/:*?"<>|]+/g, "").trim();
+    return cleaned || fallback;
+  }
+
   function exportPNG() {
     const tmpCanvas = document.createElement("canvas");
     const tmpCtx = tmpCanvas.getContext("2d");
@@ -1045,7 +1055,7 @@
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "pixel-art.png";
+      a.download = getExportBaseName("pixel-art") + ".png";
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -1160,52 +1170,143 @@
     });
   }
 
-  function frameFileName(index) {
-    return "frame_" + String(index + 1).padStart(3, "0") + ".png";
+  function frameFileName(index, baseName) {
+    return (baseName || "frame") + "_" + String(index + 1).padStart(3, "0") + ".png";
   }
 
-  // Exports every frame as a numbered PNG. Where the browser supports
-  // the File System Access API, the person picks a real folder and
-  // the files are written straight into it; otherwise each frame is
-  // downloaded individually (they land in the browser's default
-  // downloads location instead).
+  // ==================== ZIP (store, no compression) ====================
+  // A minimal, dependency-free ZIP writer. Uses the "store" method
+  // (0% deflate) since implementing a real compressor isn't worth it
+  // for PNG frames, which are already compressed — the ZIP here is
+  // purely a container so every frame downloads as a single file.
+  const CRC_TABLE = (function () {
+    const table = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) {
+      let c = n;
+      for (let k = 0; k < 8; k++) {
+        c = c & 1 ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+      }
+      table[n] = c >>> 0;
+    }
+    return table;
+  })();
+
+  function crc32(bytes) {
+    let crc = 0xffffffff;
+    for (let i = 0; i < bytes.length; i++) {
+      crc = CRC_TABLE[(crc ^ bytes[i]) & 0xff] ^ (crc >>> 8);
+    }
+    return (crc ^ 0xffffffff) >>> 0;
+  }
+
+  // DOS date/time bit-packing, required by the ZIP local/central
+  // headers. Uses "now" — these files never existed on a real disk.
+  function dosDateTime() {
+    const d = new Date();
+    const time =
+      ((d.getHours() & 0x1f) << 11) |
+      ((d.getMinutes() & 0x3f) << 5) |
+      ((d.getSeconds() >> 1) & 0x1f);
+    const date =
+      (((d.getFullYear() - 1980) & 0x7f) << 9) |
+      (((d.getMonth() + 1) & 0xf) << 5) |
+      (d.getDate() & 0x1f);
+    return { time: time & 0xffff, date: date & 0xffff };
+  }
+
+  // Builds a single .zip Blob (store method) from [{name, data:Uint8Array}]
+  function buildZip(files) {
+    const { time, date } = dosDateTime();
+    const localParts = [];
+    const centralParts = [];
+    let offset = 0;
+    const encoder = new TextEncoder();
+
+    files.forEach(function (file) {
+      const nameBytes = encoder.encode(file.name);
+      const data = file.data;
+      const crc = crc32(data);
+      const size = data.length;
+
+      const local = new DataView(new ArrayBuffer(30));
+      local.setUint32(0, 0x04034b50, true); // local file header signature
+      local.setUint16(4, 20, true); // version needed
+      local.setUint16(6, 0, true); // flags
+      local.setUint16(8, 0, true); // method: 0 = store
+      local.setUint16(10, time, true);
+      local.setUint16(12, date, true);
+      local.setUint32(14, crc, true);
+      local.setUint32(18, size, true); // compressed size
+      local.setUint32(22, size, true); // uncompressed size
+      local.setUint16(26, nameBytes.length, true);
+      local.setUint16(28, 0, true); // extra field length
+      localParts.push(new Uint8Array(local.buffer), nameBytes, data);
+
+      const central = new DataView(new ArrayBuffer(46));
+      central.setUint32(0, 0x02014b50, true); // central directory signature
+      central.setUint16(4, 20, true); // version made by
+      central.setUint16(6, 20, true); // version needed
+      central.setUint16(8, 0, true); // flags
+      central.setUint16(10, 0, true); // method: store
+      central.setUint16(12, time, true);
+      central.setUint16(14, date, true);
+      central.setUint32(16, crc, true);
+      central.setUint32(20, size, true);
+      central.setUint32(24, size, true);
+      central.setUint16(28, nameBytes.length, true);
+      central.setUint16(30, 0, true); // extra length
+      central.setUint16(32, 0, true); // comment length
+      central.setUint16(34, 0, true); // disk number
+      central.setUint16(36, 0, true); // internal attrs
+      central.setUint32(38, 0, true); // external attrs
+      central.setUint32(42, offset, true); // local header offset
+      centralParts.push(new Uint8Array(central.buffer), nameBytes);
+
+      offset += local.buffer.byteLength + nameBytes.length + size;
+    });
+
+    const centralSize = centralParts.reduce(function (sum, p) { return sum + p.length; }, 0);
+    const end = new DataView(new ArrayBuffer(22));
+    end.setUint32(0, 0x06054b50, true); // end of central directory signature
+    end.setUint16(4, 0, true);
+    end.setUint16(6, 0, true);
+    end.setUint16(8, files.length, true);
+    end.setUint16(10, files.length, true);
+    end.setUint32(12, centralSize, true);
+    end.setUint32(16, offset, true); // offset of central directory
+    end.setUint16(20, 0, true); // comment length
+
+    return new Blob(localParts.concat(centralParts, [new Uint8Array(end.buffer)]), {
+      type: "application/zip",
+    });
+  }
+
+  // Exports every frame as a numbered PNG bundled into a single .zip
+  // file, so the whole animation downloads as one file instead of a
+  // batch of individually-saved PNGs.
   async function exportAnimation() {
     if (!state.frames.length) return;
 
-    if ("showDirectoryPicker" in window) {
-      let dirHandle;
-      try {
-        dirHandle = await window.showDirectoryPicker();
-      } catch (err) {
-        return; // person cancelled the picker
-      }
-      try {
-        for (let i = 0; i < state.frames.length; i++) {
-          const blob = await frameToBlob(state.frames[i]);
-          const fileHandle = await dirHandle.getFileHandle(frameFileName(i), { create: true });
-          const writable = await fileHandle.createWritable();
-          await writable.write(blob);
-          await writable.close();
-        }
-        alert("Exported " + state.frames.length + " frame(s) to the selected folder.");
-      } catch (err) {
-        alert("Couldn't finish exporting to that folder: " + err.message);
-      }
-    } else {
-      for (let i = 0; i < state.frames.length; i++) {
-        const blob = await frameToBlob(state.frames[i]);
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = frameFileName(i);
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        await new Promise(function (r) { setTimeout(r, 150); });
-      }
-      alert("Your browser can't pick a folder directly, so " + state.frames.length + " frame(s) were downloaded individually instead.");
+    const baseName = getExportBaseName("animation_frames");
+    const files = [];
+    for (let i = 0; i < state.frames.length; i++) {
+      const blob = await frameToBlob(state.frames[i]);
+      const buffer = await blob.arrayBuffer();
+      files.push({ name: frameFileName(i, baseName), data: new Uint8Array(buffer) });
     }
+
+    const zipName = baseName + ".zip";
+    const zipBlob = buildZip(files);
+    const url = URL.createObjectURL(zipBlob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = zipName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    alert("Exported " + state.frames.length + " frame(s) as " + zipName + ".");
   }
 
   // ==================== KEYBOARD SHORTCUTS ====================

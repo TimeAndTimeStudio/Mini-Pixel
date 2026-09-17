@@ -61,6 +61,8 @@
           <span class="topbar-divider"></span>
           <span id="topbar-canvas-anchor"></span>
           <span class="topbar-divider"></span>
+          <label for="export-filename" class="sr-only">Export file name</label>
+          <input type="text" id="export-filename" placeholder="file name" maxlength="60" title="File name used for PNG / ZIP export">
           <button id="btn-import" class="icon-btn" title="Import PNG">
             <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
               <path d="M12 3v12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
@@ -281,7 +283,7 @@
             </svg>
             <span class="sr-only">Delete frame</span>
           </button>
-          <button id="btn-frame-export" class="icon-btn" title="Export all frames to a folder">
+          <button id="btn-frame-export" class="icon-btn" title="Export all frames as a single .zip">
             <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
               <path d="M3 7a1 1 0 0 1 1-1h4l2 2h9a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
               <path d="M12 11v6M9.5 14.5L12 12l2.5 2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
