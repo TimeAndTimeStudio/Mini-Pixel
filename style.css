@@ -41,6 +41,7 @@ button:focus-visible, input:focus-visible, select:focus-visible{
 /* Only scrollable while the side toolbar is open — that's the only
    time the workspace gets narrow enough for the buttons not to fit. */
 #app.sidebar-open #topbar{overflow-x:auto;}
+#app.sidebar-open #bottombar{overflow-x:auto;}
 #topbar .row{width:auto;display:flex;align-items:center;}
 #topbar .icon-btn{width:30px;height:30px;}
 #topbar .icon-btn .icon{width:15px;height:15px;}

@@ -58,7 +58,6 @@
   const btnMirrorY = document.getElementById("btn-mirror-y");
   const btnNew = document.getElementById("btn-new");
   const sizeGroup = document.getElementById("size-group");
-  const sizeGroupStartDivider = document.getElementById("size-group-start-divider");
   const sizeGroupEndDivider = document.getElementById("size-group-end-divider");
   const topbarCanvasAnchor = document.getElementById("topbar-canvas-anchor");
   const zoomSelect = document.getElementById("zoom-select");
@@ -1403,12 +1402,11 @@
   // markup) means there's only one set of inputs/listeners to keep
   // in sync.
   //
-  // The sidebar normally brackets #size-group with a divider on each
-  // side. When the group itself moves out to the topbar on desktop,
-  // those two dividers end up sitting right next to each other with
-  // nothing between them — a doubled-up line. So the leading divider
-  // is hidden whenever the group isn't actually in the sidebar,
-  // leaving a single divider line in its place.
+  // Only a single divider (#size-group-end-divider) brackets the
+  // group's slot in the sidebar, on the frames-group side, and it
+  // stays put whether or not #size-group itself is currently there —
+  // so there's never more than one divider line in that spot,
+  // regardless of screen size.
   const desktopLayoutQuery = window.matchMedia("(min-width: 481px)");
   function placeCanvasCreateGroup(isDesktop) {
     if (isDesktop) {
@@ -1420,7 +1418,6 @@
         sizeGroupEndDivider.parentElement.insertBefore(sizeGroup, sizeGroupEndDivider);
       }
     }
-    sizeGroupStartDivider.style.display = isDesktop ? "none" : "";
   }
   placeCanvasCreateGroup(desktopLayoutQuery.matches);
   desktopLayoutQuery.addEventListener("change", function (e) {
