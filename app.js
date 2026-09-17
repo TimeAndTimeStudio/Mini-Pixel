@@ -42,7 +42,6 @@
   const btnPencil = document.getElementById("btn-pencil");
   const btnEraser = document.getElementById("btn-eraser");
   const btnEyedropper = document.getElementById("btn-eyedropper");
-  const brushSizeSlider = document.getElementById("brush-size-slider");
   const brushSizeNumber = document.getElementById("brush-size-number");
   const toolbar = document.getElementById("toolbar");
   const toolbarToggle = document.getElementById("toolbar-toggle");
@@ -416,14 +415,16 @@
     if (state.activePointerId === null) statusPixel.textContent = "\u2014";
   });
 
-  // ==================== PAN (mouse, middle-drag) ====================
+  // ==================== PAN (mouse, middle- or right-drag) ====================
   let isPanning = false;
   let panStartX = 0;
   let panStartY = 0;
   let panPointerId = null;
 
+  canvasWrapper.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+
   canvasWrapper.addEventListener("pointerdown", function (e) {
-    if (e.button === 1) {
+    if (e.button === 1 || e.button === 2) {
       isPanning = true;
       panPointerId = e.pointerId;
       panStartX = e.clientX - state.panX;
@@ -449,9 +450,28 @@
     }
   });
 
+  // ==================== ZOOM (mouse wheel) ====================
+  // Anchors on the cursor position so whatever's under the pointer
+  // stays put as the view scales in/out.
+  canvasWrapper.addEventListener("wheel", function (e) {
+    e.preventDefault();
+    const rect = canvasWrapper.getBoundingClientRect();
+    const { lx, ly } = toLocal(e.clientX, e.clientY, state.panX, state.panY, state.zoom, state.rotation);
+
+    const factor = Math.pow(1.0016, -e.deltaY);
+    const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, state.zoom * factor));
+
+    const offset = toScreenOffset(lx, ly, newZoom, state.rotation);
+    state.zoom = newZoom;
+    state.panX = (e.clientX - rect.left) - offset.x;
+    state.panY = (e.clientY - rect.top) - offset.y;
+    applyTransform();
+  }, { passive: false });
+
   // ==================== PAN / ZOOM / ROTATE (two-finger touch) ====================
   const touchPoints = new Map(); // pointerId -> {x, y}
   let gesture = null;
+  let gestureFramePending = false;
 
   function touchDist(p1, p2) { return Math.hypot(p2.x - p1.x, p2.y - p1.y); }
   function touchAngle(p1, p2) { return (Math.atan2(p2.y - p1.y, p2.x - p1.x) * 180) / Math.PI; }
@@ -479,26 +499,38 @@
     }
   });
 
+  // Touch fires pointermove far more often than the screen can repaint,
+  // so we only record the latest finger positions here and let a single
+  // requestAnimationFrame callback per frame do the (heavier) transform
+  // math — applying every single event immediately is what was causing
+  // the stutter during pinch/rotate.
+  function applyGestureFrame() {
+    gestureFramePending = false;
+    if (touchPoints.size !== 2 || !gesture) return;
+    const pts = Array.from(touchPoints.values());
+    const dist = touchDist(pts[0], pts[1]);
+    const angle = touchAngle(pts[0], pts[1]);
+    const mid = touchMid(pts[0], pts[1]);
+
+    let newZoom = gesture.startZoom * (dist / gesture.startDist);
+    newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newZoom));
+    const newRotation = gesture.startRotation + (angle - gesture.startAngle);
+
+    const offset = toScreenOffset(gesture.anchorLx, gesture.anchorLy, newZoom, newRotation);
+    state.zoom = newZoom;
+    state.rotation = newRotation;
+    state.panX = mid.x - offset.x;
+    state.panY = mid.y - offset.y;
+    applyTransform();
+  }
+
   window.addEventListener("pointermove", function (e) {
     if (e.pointerType !== "touch" || !touchPoints.has(e.pointerId)) return;
     touchPoints.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
-    if (touchPoints.size === 2 && gesture) {
-      const pts = Array.from(touchPoints.values());
-      const dist = touchDist(pts[0], pts[1]);
-      const angle = touchAngle(pts[0], pts[1]);
-      const mid = touchMid(pts[0], pts[1]);
-
-      let newZoom = gesture.startZoom * (dist / gesture.startDist);
-      newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newZoom));
-      const newRotation = gesture.startRotation + (angle - gesture.startAngle);
-
-      const offset = toScreenOffset(gesture.anchorLx, gesture.anchorLy, newZoom, newRotation);
-      state.zoom = newZoom;
-      state.rotation = newRotation;
-      state.panX = mid.x - offset.x;
-      state.panY = mid.y - offset.y;
-      applyTransform();
+    if (touchPoints.size === 2 && gesture && !gestureFramePending) {
+      gestureFramePending = true;
+      requestAnimationFrame(applyGestureFrame);
     }
   });
 
@@ -1026,15 +1058,21 @@
   }
 
   // ==================== BRUSH SIZE (shared: pencil + eraser) ====================
-  function setBrushSize(v) {
-    v = Math.max(1, Math.min(64, parseInt(v, 10) || 1));
-    state.brushSize = v;
-    brushSizeSlider.value = v;
-    brushSizeNumber.value = v;
+  // Only touches state while the field is being typed into — never
+  // rewrites what's on screen mid-typing (that used to force the box
+  // back to "1" the instant it was cleared, so the next digit typed
+  // landed after it instead of replacing it, e.g. clearing to type
+  // "5" produced "15"). The displayed value only gets clamped/tidied
+  // once the person leaves the field.
+  function setBrushSize(v, commit) {
+    const parsed = parseInt(v, 10);
+    const valid = !isNaN(parsed);
+    const clamped = Math.max(1, Math.min(64, valid ? parsed : state.brushSize));
+    state.brushSize = clamped;
+    if (commit) brushSizeNumber.value = clamped;
   }
-  brushSizeSlider.addEventListener("input", function (e) { setBrushSize(e.target.value); });
-  brushSizeNumber.addEventListener("input", function (e) { setBrushSize(e.target.value); });
-  brushSizeNumber.addEventListener("blur", function () { setBrushSize(brushSizeNumber.value); });
+  brushSizeNumber.addEventListener("input", function (e) { setBrushSize(e.target.value, false); });
+  brushSizeNumber.addEventListener("blur", function () { setBrushSize(brushSizeNumber.value, true); });
 
   // ==================== TOOLBAR COLLAPSE/EXPAND ====================
   // Toolbar starts collapsed to a slim strip; the toggle only ever

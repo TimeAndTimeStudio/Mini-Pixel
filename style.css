@@ -149,20 +149,8 @@ button.icon-btn .icon{width:16px;height:16px;}
 /* ---------- Shared pencil/eraser brush size control ---------- */
 #size-row{display:flex;align-items:center;gap:6px;color:var(--text-dim);}
 #size-label{font-size:11px;color:var(--text-dim);flex-shrink:0;}
-#brush-size-slider{
-  -webkit-appearance:none;appearance:none;flex:1;min-width:0;height:5px;border-radius:4px;
-  background:var(--ink-600);cursor:pointer;
-}
-#brush-size-slider::-webkit-slider-thumb{
-  -webkit-appearance:none;width:13px;height:13px;border-radius:50%;
-  background:var(--accent);border:2px solid var(--accent-ink);cursor:pointer;
-}
-#brush-size-slider::-moz-range-thumb{
-  width:13px;height:13px;border-radius:50%;background:var(--accent);
-  border:2px solid var(--accent-ink);cursor:pointer;
-}
 #brush-size-number{
-  width:34px;flex-shrink:0;padding:4px 2px;border:1px solid var(--ink-600);border-radius:6px;
+  flex:1;min-width:0;padding:4px 2px;border:1px solid var(--ink-600);border-radius:6px;
   background:var(--ink-800);color:var(--text);font-size:11px;text-align:center;
 }
 
