@@ -38,24 +38,30 @@ button:focus-visible, input:focus-visible, select:focus-visible{
   padding:6px 10px;background:var(--ink-900);border-bottom:1px solid var(--line);
   overflow-x:auto;overflow-y:hidden;
 }
-#topbar .row{width:auto;}
+#topbar .row{width:auto;display:flex;align-items:center;}
 #topbar .icon-btn{width:30px;height:30px;}
 #topbar .icon-btn .icon{width:15px;height:15px;}
 /* Never wrap onto a second line — that's what was squeezing the
    buttons together whenever the workspace narrowed (e.g. expanding
-   the side toolbar). Scroll sideways instead. */
+   the side toolbar). Scroll sideways instead. Needs its own
+   display:flex above: .icon-row's flex-wrap normally rides on
+   ".group .row{display:flex}", which doesn't reach this row since
+   it isn't inside a .group. */
 #topbar .icon-row{flex-wrap:nowrap;}
 .topbar-divider{width:1px;align-self:stretch;background:var(--line);flex-shrink:0;margin:2px 2px;}
 #topbar #file-input{display:none;}
 
 /* Bottom bar: primary drawing tools (pencil/eraser/eyedropper + brush
-   size), kept close to the canvas for quick thumb reach. */
+   size), kept close to the canvas for quick thumb reach. Bottom
+   padding includes the safe-area inset so it isn't covered by a
+   phone's gesture bar / home indicator. */
 #bottombar{
   display:flex;align-items:center;flex-shrink:0;
-  padding:6px 10px;background:var(--ink-900);border-top:1px solid var(--line);
+  padding:6px 10px calc(6px + env(safe-area-inset-bottom, 0px)) 10px;
+  background:var(--ink-900);border-top:1px solid var(--line);
   overflow-x:auto;overflow-y:hidden;
 }
-#bottombar .row{width:auto;}
+#bottombar .row{width:auto;display:flex;align-items:center;}
 #bottombar .icon-row{flex-wrap:nowrap;}
 #bottombar .icon-btn{width:34px;height:34px;}
 #bottombar #size-label{flex-shrink:0;}
