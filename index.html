@@ -78,22 +78,7 @@
       <div id="canvas-wrapper">
         <canvas id="display-canvas"></canvas>
       </div>
-      <div id="statusbar">
-        <span id="status-size">Canvas: <b>64 × 64</b></span>
-        <span id="status-pixel">—</span>
-        <span id="status-zoom">Zoom: <b>4×</b> · Rotation: <b>0°</b></span>
-      </div>
-    </div>
-
-    <div id="toolbar-dock">
-      <button id="toolbar-toggle" data-collapsed="true" title="Expand toolbar">
-        <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-          <path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </button>
-    <aside id="toolbar" class="collapsed">
-      <div id="toolbar-inner">
-      <div class="group" id="tool-group">
+      <div id="bottombar">
         <div class="row icon-row">
           <button id="btn-pencil" class="tool-btn icon-btn active" title="Pencil (P)">
             <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -117,14 +102,26 @@
             </svg>
             <span class="sr-only">Eyedropper</span>
           </button>
-        </div>
-        <div class="row" id="size-row" title="Brush size (shared by pencil &amp; eraser)">
+          <span class="topbar-divider"></span>
           <label for="brush-size-number" id="size-label">Size</label>
           <input type="number" id="brush-size-number" min="1" max="64" value="1" title="Brush size in pixels">
         </div>
       </div>
-      <div class="divider"></div>
+      <div id="statusbar">
+        <span id="status-size">Canvas: <b>64 × 64</b></span>
+        <span id="status-pixel">—</span>
+        <span id="status-zoom">Zoom: <b>4×</b> · Rotation: <b>0°</b></span>
+      </div>
+    </div>
 
+    <div id="toolbar-dock">
+      <button id="toolbar-toggle" data-collapsed="true" title="Expand toolbar">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+    <aside id="toolbar" class="collapsed">
+      <div id="toolbar-inner">
       <div class="group" id="project-group">
         <div class="row">
           <label for="project-select" class="sr-only">Saved projects</label>

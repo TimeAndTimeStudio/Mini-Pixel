@@ -36,13 +36,33 @@ button:focus-visible, input:focus-visible, select:focus-visible{
 #topbar{
   display:flex;align-items:center;flex-shrink:0;
   padding:6px 10px;background:var(--ink-900);border-bottom:1px solid var(--line);
-  overflow-x:auto;
+  overflow-x:auto;overflow-y:hidden;
 }
 #topbar .row{width:auto;}
 #topbar .icon-btn{width:30px;height:30px;}
 #topbar .icon-btn .icon{width:15px;height:15px;}
+/* Never wrap onto a second line — that's what was squeezing the
+   buttons together whenever the workspace narrowed (e.g. expanding
+   the side toolbar). Scroll sideways instead. */
+#topbar .icon-row{flex-wrap:nowrap;}
 .topbar-divider{width:1px;align-self:stretch;background:var(--line);flex-shrink:0;margin:2px 2px;}
 #topbar #file-input{display:none;}
+
+/* Bottom bar: primary drawing tools (pencil/eraser/eyedropper + brush
+   size), kept close to the canvas for quick thumb reach. */
+#bottombar{
+  display:flex;align-items:center;flex-shrink:0;
+  padding:6px 10px;background:var(--ink-900);border-top:1px solid var(--line);
+  overflow-x:auto;overflow-y:hidden;
+}
+#bottombar .row{width:auto;}
+#bottombar .icon-row{flex-wrap:nowrap;}
+#bottombar .icon-btn{width:34px;height:34px;}
+#bottombar #size-label{flex-shrink:0;}
+#bottombar #brush-size-number{
+  width:52px;flex-shrink:0;padding:5px 2px;border:1px solid var(--ink-600);border-radius:6px;
+  background:var(--ink-800);color:var(--text);font-size:11.5px;text-align:center;
+}
 
 
 #canvas-wrapper{
