@@ -56,51 +56,73 @@ button:focus-visible, input:focus-visible, select:focus-visible{
 #statusbar span b{color:var(--text);font-weight:600;}
 
 /* ---------- Sidebar toolbar ---------- */
+:root{ --toolbar-w:112px; }
+
 #toolbar-dock{
   order:2;flex-shrink:0;height:100%;position:relative;display:flex;
+  overflow:hidden; /* hard clip — nothing from the inner panel can spill past the dock */
 }
 
 /* Vertical handle strip that toggles the toolbar open/closed.
    Sits flush against the toolbar's outer edge. */
 #toolbar-toggle{
-  width:18px;flex-shrink:0;height:100%;
+  width:20px;flex-shrink:0;height:100%;
   display:flex;align-items:center;justify-content:center;
   background:var(--ink-900);border-left:1px solid var(--line);
   cursor:pointer;padding:0;border-radius:0;
 }
 #toolbar-toggle:hover{background:var(--ink-700);}
 #toolbar-toggle .icon{
-  width:11px;height:11px;transition:transform .18s;
+  width:11px;height:11px;transition:transform .18s;flex-shrink:0;
 }
 #toolbar-toggle[data-collapsed="true"] .icon{transform:rotate(180deg);}
 
+/* Outer clipping box: only its width animates, so collapsing never
+   reflows or resizes the panel's own content — it just gets covered. */
 #toolbar{
-  width:172px;flex-shrink:0;height:100%;
-  display:flex;flex-direction:column;gap:9px;
-  padding:10px 9px;background:var(--ink-900);
-  border-left:1px solid var(--line);overflow-y:auto;overflow-x:hidden;
-  transition:width .18s ease, padding .18s ease, opacity .18s ease;
+  width:var(--toolbar-w);flex-shrink:0;height:100%;overflow:hidden;
+  background:var(--ink-900);border-left:1px solid var(--line);
+  transition:width .18s ease;
 }
-#toolbar.collapsed{
-  width:0;padding-left:0;padding-right:0;opacity:0;pointer-events:none;
+#toolbar.collapsed{width:0;border-left:none;}
+
+/* Inner panel: fixed width and its own scroll region, independent of
+   the outer box's animated width. touch-action is opened back up here
+   (the page default is "none") so dragging inside the toolbar scrolls
+   it instead of being swallowed — this is what was hiding the
+   Import/Export row off the bottom on short/mobile screens. */
+#toolbar-inner{
+  width:var(--toolbar-w);flex-shrink:0;height:100%;
+  display:flex;flex-direction:column;gap:9px;
+  padding:10px 9px;box-sizing:border-box;
+  overflow-y:auto;overflow-x:hidden;touch-action:pan-y;
 }
 
 .icon{width:13px;height:13px;flex-shrink:0;}
 
-.brand{
-  display:inline-flex;align-items:center;gap:6px;
-  font-weight:600;letter-spacing:.2px;color:var(--accent-strong);
-  font-size:13px;white-space:nowrap;
+.sr-only{
+  position:absolute;width:1px;height:1px;padding:0;margin:-1px;
+  overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;
 }
-.brand .icon{width:15px;height:15px;}
+
+.brand{
+  display:flex;align-items:center;justify-content:center;
+  color:var(--accent-strong);flex-shrink:0;padding:2px 0 4px;
+}
+.brand .icon{width:19px;height:19px;}
 
 .divider{height:1px;width:100%;background:var(--line);flex-shrink:0;}
 
-.group{display:flex;flex-direction:column;gap:5px;}
+.group{display:flex;flex-direction:column;gap:5px;min-width:0;flex-shrink:0;align-items:center;}
 .group-label{font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.4px;}
 
-.group .row{display:flex;align-items:center;gap:5px;}
+.group .row{display:flex;align-items:center;gap:5px;width:100%;}
 .group .row > button{flex:1;justify-content:center;}
+
+/* Icon-row: buttons sit side-by-side as a small icon grid, wrapping
+   onto a new line if the toolbar is too narrow to fit them all. */
+.icon-row{justify-content:center;flex-wrap:wrap;gap:6px !important;}
+.icon-row > button{flex:0 0 auto;}
 
 button{
   display:inline-flex;align-items:center;justify-content:flex-start;gap:6px;
@@ -113,8 +135,15 @@ button:hover:not(:disabled){background:var(--ink-700);border-color:var(--accent)
 button:disabled{opacity:.35;cursor:default;}
 button:disabled:hover{background:var(--ink-800);border-color:var(--ink-600);}
 
-#history-group,#io-group{flex-direction:row;flex-wrap:wrap;}
-#history-group button,#io-group button{width:auto;flex:1 1 auto;justify-content:center;}
+/* Icon-only square buttons, the toolbar's default look — no text,
+   just an SVG glyph and a native title tooltip on hover. */
+button.icon-btn{
+  width:34px;height:34px;flex:0 0 auto;padding:0;
+  justify-content:center;align-items:center;
+}
+button.icon-btn .icon{width:16px;height:16px;}
+
+#history-group .row,#io-group .row{flex-direction:row;}
 
 .tool-btn.active{
   background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600;
@@ -124,10 +153,10 @@ button:disabled:hover{background:var(--ink-800);border-color:var(--ink-600);}
 }
 
 /* ---------- Shared pencil/eraser brush size control ---------- */
-#size-row{display:flex;align-items:center;gap:7px;}
-#size-row label{flex-shrink:0;}
+#size-row{display:flex;align-items:center;gap:6px;color:var(--text-dim);}
+#size-row .icon{flex-shrink:0;}
 #brush-size-slider{
-  -webkit-appearance:none;appearance:none;flex:1;height:5px;border-radius:4px;
+  -webkit-appearance:none;appearance:none;flex:1;min-width:0;height:5px;border-radius:4px;
   background:var(--ink-600);cursor:pointer;
 }
 #brush-size-slider::-webkit-slider-thumb{
@@ -200,10 +229,11 @@ label{font-size:11px;color:var(--text-dim);flex-shrink:0;}
 /* Toolbar always stays a vertical column on the right, even on
    narrow/mobile screens — it just gets slimmer instead of moving. */
 @media (max-width:480px){
-  #toolbar{width:130px;padding:8px 7px;gap:8px;}
-  button{font-size:10.5px;padding:5px 7px;gap:5px;}
-  .icon{width:11px;height:11px;}
-  .brand{font-size:12px;}
+  :root{ --toolbar-w:88px; }
+  #toolbar-inner{padding:7px 6px;gap:7px;}
+  button.icon-btn{width:30px;height:30px;}
+  button.icon-btn .icon{width:14px;height:14px;}
+  .brand .icon{width:16px;height:16px;}
   #wheel-wrap{width:100%;}
   #color-wheel{width:100%;height:auto;}
 }

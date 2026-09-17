@@ -812,6 +812,9 @@
   }
 
   // ==================== TOOLBAR COLLAPSE/EXPAND ====================
+  // Toolbar starts collapsed to a slim strip; the toggle only ever
+  // flips a width on the outer #toolbar box (see CSS) so the inner
+  // panel's own layout/scroll never has to reflow.
   function toggleToolbar() {
     const collapsed = toolbar.classList.toggle("collapsed");
     toolbarToggle.setAttribute("data-collapsed", collapsed ? "true" : "false");
