@@ -11,6 +11,7 @@
     mirrorX: false,
     mirrorY: false,
     zoom: 4,
+    rotation: 0, // degrees, view-only (does not touch pixel data)
     panX: 0,
     panY: 0,
     undoStack: [],
@@ -19,6 +20,9 @@
     lastPixel: null,
     activePointerId: null,
   };
+
+  const MIN_ZOOM = 0.5;
+  const MAX_ZOOM = 64;
 
   // ==================== DOM REFS ====================
   const displayCanvas = document.getElementById("display-canvas");
@@ -32,6 +36,9 @@
   const btnMirrorY = document.getElementById("btn-mirror-y");
   const btnNew = document.getElementById("btn-new");
   const zoomSelect = document.getElementById("zoom-select");
+  const btnRotateLeft = document.getElementById("btn-rotate-left");
+  const btnRotateRight = document.getElementById("btn-rotate-right");
+  const btnResetView = document.getElementById("btn-reset-view");
   const btnUndo = document.getElementById("btn-undo");
   const btnRedo = document.getElementById("btn-redo");
   const btnImport = document.getElementById("btn-import");
@@ -57,13 +64,10 @@
   }
 
   // ==================== CANVAS SETUP ====================
-  // BUGFIX: previously the canvas was scaled TWICE — once via
-  // style.width/height (= size * zoom) and again via a CSS
-  // transform: scale(zoom). That made the visible canvas zoom^2 the
-  // intended size and made drawing coordinates wrong at any zoom
-  // other than 1x. Fix: the canvas element's CSS box always stays at
-  // 1 CSS px per pixel; all zooming happens purely through the
-  // transform, and getCanvasCoords() matches that single scale factor.
+  // The canvas element's own CSS box always stays at 1 CSS px per
+  // pixel. Panning, zooming and rotating are all pure view transforms
+  // applied via a single CSS transform, so they never touch pixel
+  // data and getCanvasCoords() only has to invert one matrix.
   function setupCanvas() {
     const w = state.width;
     const h = state.height;
@@ -78,6 +82,7 @@
 
     state.panX = 0;
     state.panY = 0;
+    state.rotation = 0;
 
     state.undoStack = [];
     state.redoStack = [];
@@ -96,24 +101,57 @@
     imgData.data.set(state.pixels);
     ctx.putImageData(imgData, 0, 0);
 
-    displayCanvas.style.transform =
-      "translate(" + state.panX + "px," + state.panY + "px) scale(" + state.zoom + ")";
-    displayCanvas.style.transformOrigin = "0 0";
-
+    applyTransform();
     updateHistoryButtons();
   }
 
-  function zoomDisplay() {
-    statusZoom.innerHTML = "Zoom: <b>" + state.zoom + "\u00d7</b> \u00b7 Middle-drag to pan";
-    render();
+  // Only updates the view transform + status text, skipping the
+  // (relatively expensive) pixel buffer -> canvas upload. Used while
+  // panning/zooming/rotating, where the pixel data itself never changes.
+  function applyTransform() {
+    displayCanvas.style.transform =
+      "translate(" + state.panX + "px," + state.panY + "px) " +
+      "rotate(" + state.rotation + "deg) " +
+      "scale(" + state.zoom + ")";
+    displayCanvas.style.transformOrigin = "0 0";
+
+    const zoomLabel = (Math.round(state.zoom * 100) / 100) + "\u00d7";
+    const rotLabel = Math.round(((state.rotation % 360) + 360) % 360) + "\u00b0";
+    statusZoom.innerHTML = "Zoom: <b>" + zoomLabel + "</b> \u00b7 Rotation: <b>" + rotLabel + "</b>";
   }
 
   // ==================== COORDINATE CONVERSION ====================
-  function getCanvasCoords(clientX, clientY) {
+  // Inverts translate -> rotate -> scale to turn a screen point into
+  // a continuous (unfloored) local canvas-pixel coordinate.
+  function toLocal(screenX, screenY, panX, panY, zoom, rotationDeg) {
     const rect = canvasWrapper.getBoundingClientRect();
-    const x = (clientX - rect.left - state.panX) / state.zoom;
-    const y = (clientY - rect.top - state.panY) / state.zoom;
-    return { x: Math.floor(x), y: Math.floor(y) };
+    const dx = (screenX - rect.left) - panX;
+    const dy = (screenY - rect.top) - panY;
+    const rad = (rotationDeg * Math.PI) / 180;
+    const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
+    return {
+      lx: (dx * cos + dy * sin) / zoom,
+      ly: (-dx * sin + dy * cos) / zoom,
+    };
+  }
+
+  // Forward-projects a local canvas point through rotate+scale only
+  // (no pan), used to re-derive pan so a gesture's anchor point stays
+  // fixed under the fingers/cursor.
+  function toScreenOffset(lx, ly, zoom, rotationDeg) {
+    const rad = (rotationDeg * Math.PI) / 180;
+    const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
+    return {
+      x: zoom * (lx * cos - ly * sin),
+      y: zoom * (lx * sin + ly * cos),
+    };
+  }
+
+  function getCanvasCoords(clientX, clientY) {
+    const { lx, ly } = toLocal(clientX, clientY, state.panX, state.panY, state.zoom, state.rotation);
+    return { x: Math.floor(lx), y: Math.floor(ly) };
   }
 
   // ==================== DRAWING ====================
@@ -202,18 +240,26 @@
     saveState();
   }
 
+  // Aborts an in-progress stroke without saving it to history — used
+  // when a second touch arrives mid-stroke and the gesture switches
+  // from drawing to pan/zoom/rotate.
+  function cancelDraw() {
+    state.isDrawing = false;
+    state.lastPixel = null;
+    state.activePointerId = null;
+  }
+
   function updatePixelStatus(x, y) {
     statusPixel.textContent = "(" + x + ", " + y + ")";
   }
 
-  // ==================== POINTER EVENTS ====================
-  // BUGFIX: pointermove/up were bound only to the canvas element, so
-  // a fast stroke that left the canvas bounds mid-drag (very easy at
-  // high zoom, since a 1px canvas move = many screen px) silently
-  // stopped drawing and the button never fired "up". Using pointer
-  // capture + window-level listeners for the active stroke fixes both.
+  // ==================== POINTER EVENTS (drawing) ====================
   function onPointerDown(e) {
     if (e.button !== 0) return;
+    // A second touch landing while one is already tracked means a
+    // pinch/rotate/pan gesture is starting, not a new stroke.
+    if (e.pointerType === "touch" && touchPoints.size >= 1) return;
+
     state.activePointerId = e.pointerId;
     try { displayCanvas.setPointerCapture(e.pointerId); } catch (err) {}
     startDraw(e.clientX, e.clientY);
@@ -237,7 +283,7 @@
     if (state.activePointerId === null) statusPixel.textContent = "\u2014";
   });
 
-  // ==================== PAN ====================
+  // ==================== PAN (mouse, middle-drag) ====================
   let isPanning = false;
   let panStartX = 0;
   let panStartY = 0;
@@ -258,7 +304,7 @@
     if (isPanning && e.pointerId === panPointerId) {
       state.panX = e.clientX - panStartX;
       state.panY = e.clientY - panStartY;
-      render();
+      applyTransform();
     }
   });
 
@@ -266,9 +312,68 @@
     if (isPanning && e.pointerId === panPointerId) {
       isPanning = false;
       panPointerId = null;
-      canvasWrapper.style.cursor = "crosshair";
+      canvasWrapper.style.cursor = state.tool === "eraser" ? "cell" : "crosshair";
     }
   });
+
+  // ==================== PAN / ZOOM / ROTATE (two-finger touch) ====================
+  const touchPoints = new Map(); // pointerId -> {x, y}
+  let gesture = null;
+
+  function touchDist(p1, p2) { return Math.hypot(p2.x - p1.x, p2.y - p1.y); }
+  function touchAngle(p1, p2) { return (Math.atan2(p2.y - p1.y, p2.x - p1.x) * 180) / Math.PI; }
+  function touchMid(p1, p2) { return { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 }; }
+
+  window.addEventListener("pointerdown", function (e) {
+    if (e.pointerType !== "touch") return;
+    touchPoints.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (touchPoints.size === 2) {
+      cancelDraw();
+      const pts = Array.from(touchPoints.values());
+      const startMid = touchMid(pts[0], pts[1]);
+      const anchor = toLocal(startMid.x, startMid.y, state.panX, state.panY, state.zoom, state.rotation);
+      gesture = {
+        startDist: touchDist(pts[0], pts[1]),
+        startAngle: touchAngle(pts[0], pts[1]),
+        startZoom: state.zoom,
+        startRotation: state.rotation,
+        anchorLx: anchor.lx,
+        anchorLy: anchor.ly,
+      };
+    }
+  });
+
+  window.addEventListener("pointermove", function (e) {
+    if (e.pointerType !== "touch" || !touchPoints.has(e.pointerId)) return;
+    touchPoints.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (touchPoints.size === 2 && gesture) {
+      const pts = Array.from(touchPoints.values());
+      const dist = touchDist(pts[0], pts[1]);
+      const angle = touchAngle(pts[0], pts[1]);
+      const mid = touchMid(pts[0], pts[1]);
+
+      let newZoom = gesture.startZoom * (dist / gesture.startDist);
+      newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newZoom));
+      const newRotation = gesture.startRotation + (angle - gesture.startAngle);
+
+      const offset = toScreenOffset(gesture.anchorLx, gesture.anchorLy, newZoom, newRotation);
+      state.zoom = newZoom;
+      state.rotation = newRotation;
+      state.panX = mid.x - offset.x;
+      state.panY = mid.y - offset.y;
+      applyTransform();
+    }
+  });
+
+  function releaseTouch(e) {
+    if (e.pointerType !== "touch") return;
+    touchPoints.delete(e.pointerId);
+    if (touchPoints.size < 2) gesture = null;
+  }
+  window.addEventListener("pointerup", releaseTouch);
+  window.addEventListener("pointercancel", releaseTouch);
 
   // ==================== UNDO / REDO ====================
   function saveState() {
@@ -327,10 +432,6 @@
 
   function onColorChange(e) {
     state.color = hexToRGBA(e.target.value);
-    // BUGFIX: picking a color while the eraser was selected used to
-    // silently update state.color but nothing visible happened, which
-    // reads like a bug ("my color picker doesn't work"). Switch back
-    // to the pencil so the new color is immediately usable.
     if (state.tool === "eraser") selectTool("pencil");
   }
 
@@ -345,10 +446,23 @@
     btnMirrorY.classList.toggle("active", state.mirrorY);
   }
 
-  // ==================== ZOOM ====================
+  // ==================== ZOOM / ROTATE / VIEW ====================
   function onZoomChange(e) {
     state.zoom = parseInt(e.target.value, 10);
-    zoomDisplay();
+    applyTransform();
+  }
+
+  function rotateBy(deltaDeg) {
+    state.rotation += deltaDeg;
+    applyTransform();
+  }
+
+  function resetView() {
+    state.panX = 0;
+    state.panY = 0;
+    state.rotation = 0;
+    state.zoom = parseInt(zoomSelect.value, 10) || 4;
+    applyTransform();
   }
 
   // ==================== PNG IMPORT ====================
@@ -360,9 +474,6 @@
     const file = e.target.files[0];
     if (!file) return;
 
-    // BUGFIX: no validation this is actually a readable image, and no
-    // cap on imported size — a huge PNG would silently blow past the
-    // app's own 2048x2048 limit and could freeze the tab.
     const reader = new FileReader();
     reader.onload = function (evt) {
       const img = new Image();
@@ -393,6 +504,7 @@
 
         state.panX = 0;
         state.panY = 0;
+        state.rotation = 0;
         state.undoStack = [];
         state.redoStack = [];
         saveState();
@@ -440,10 +552,6 @@
   function onKeyDown(e) {
     if (e.target.tagName === "INPUT") return;
 
-    // BUGFIX: shortcuts fired even with modifier keys held for
-    // unrelated browser actions (e.g. Cmd+P for print would also
-    // silently switch to the pencil tool). Ignore when any modifier
-    // other than the ones we explicitly check is held.
     if (e.ctrlKey && (e.key === "z" || e.key === "Z")) {
       e.preventDefault();
       if (e.shiftKey) redo(); else undo();
@@ -455,6 +563,8 @@
       else if (e.key === "e" || e.key === "E") selectTool("eraser");
       else if (e.key === "m" || e.key === "M") toggleMirrorX();
       else if (e.key === "n" || e.key === "N") toggleMirrorY();
+      else if (e.key === "[") rotateBy(-15);
+      else if (e.key === "]") rotateBy(15);
     }
   }
 
@@ -473,6 +583,9 @@
   btnMirrorY.addEventListener("click", toggleMirrorY);
   btnNew.addEventListener("click", createNewCanvas);
   zoomSelect.addEventListener("change", onZoomChange);
+  btnRotateLeft.addEventListener("click", function () { rotateBy(-15); });
+  btnRotateRight.addEventListener("click", function () { rotateBy(15); });
+  btnResetView.addEventListener("click", resetView);
   btnUndo.addEventListener("click", undo);
   btnRedo.addEventListener("click", redo);
   btnImport.addEventListener("click", onImportClick);
@@ -483,14 +596,15 @@
 
   displayCanvas.addEventListener("contextmenu", function (e) { e.preventDefault(); });
 
+  // One finger draws; two fingers pan/zoom/rotate (handled above), so
+  // both touch counts need the browser's own scroll/zoom suppressed.
   canvasWrapper.addEventListener("touchstart", function (e) {
-    if (e.touches.length === 1) e.preventDefault();
+    if (e.touches.length === 1 || e.touches.length === 2) e.preventDefault();
   }, { passive: false });
   canvasWrapper.addEventListener("touchmove", function (e) {
-    if (e.touches.length === 1) e.preventDefault();
+    if (e.touches.length === 1 || e.touches.length === 2) e.preventDefault();
   }, { passive: false });
 
   // ==================== INIT ====================
   setupCanvas();
-  zoomDisplay();
 })();
