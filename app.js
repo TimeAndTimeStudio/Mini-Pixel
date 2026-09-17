@@ -7,10 +7,12 @@
     height: 64,
     pixels: null,
     tool: "pencil",
+    lastPaintTool: "pencil", // remembers pencil/eraser so the eyedropper can hand control back
     color: { r: 94, g: 234, b: 212, a: 255 },
     mirrorX: false,
     mirrorY: false,
     zoom: 4,
+    brushSize: 1, // shared by pencil and eraser
     rotation: 0, // degrees, view-only (does not touch pixel data)
     panX: 0,
     panY: 0,
@@ -29,9 +31,19 @@
   const ctx = displayCanvas.getContext("2d");
   const inputWidth = document.getElementById("input-width");
   const inputHeight = document.getElementById("input-height");
-  const colorPicker = document.getElementById("color-picker");
+  const colorWheel = document.getElementById("color-wheel");
+  const wheelCtx = colorWheel.getContext("2d");
+  const wheelDot = document.getElementById("wheel-dot");
+  const valueSlider = document.getElementById("value-slider");
+  const colorSwatch = document.getElementById("color-swatch");
+  const hexInput = document.getElementById("hex-input");
   const btnPencil = document.getElementById("btn-pencil");
   const btnEraser = document.getElementById("btn-eraser");
+  const btnEyedropper = document.getElementById("btn-eyedropper");
+  const brushSizeSlider = document.getElementById("brush-size-slider");
+  const brushSizeValue = document.getElementById("brush-size-value");
+  const toolbar = document.getElementById("toolbar");
+  const toolbarToggle = document.getElementById("toolbar-toggle");
   const btnMirrorX = document.getElementById("btn-mirror-x");
   const btnMirrorY = document.getElementById("btn-mirror-y");
   const btnNew = document.getElementById("btn-new");
@@ -80,9 +92,8 @@
 
     ctx.imageSmoothingEnabled = false;
 
-    state.panX = 0;
-    state.panY = 0;
     state.rotation = 0;
+    centerCanvas();
 
     state.undoStack = [];
     state.redoStack = [];
@@ -90,6 +101,15 @@
 
     statusSize.innerHTML = "Canvas: <b>" + w + " \u00d7 " + h + "</b>";
     render();
+  }
+
+  // Positions pan so the canvas's own center sits at the middle of the
+  // workspace, honoring whatever zoom/rotation is currently set.
+  function centerCanvas() {
+    const rect = canvasWrapper.getBoundingClientRect();
+    const offset = toScreenOffset(state.width / 2, state.height / 2, state.zoom, state.rotation);
+    state.panX = rect.width / 2 - offset.x;
+    state.panY = rect.height / 2 - offset.y;
   }
 
   // ==================== RENDER ====================
@@ -182,6 +202,25 @@
       : state.color;
   }
 
+  // Stamps a square brush of state.brushSize centered on (cx, cy).
+  // Shared by both pencil and eraser, since they only differ in the
+  // RGBA value passed in (see currentRGBA()).
+  function stampBrush(cx, cy, r, g, b, a) {
+    const size = state.brushSize;
+    if (size <= 1) {
+      drawPixel(cx, cy, r, g, b, a);
+      return;
+    }
+    const half = Math.floor(size / 2);
+    const startX = cx - half;
+    const startY = cy - half;
+    for (let dy = 0; dy < size; dy++) {
+      for (let dx = 0; dx < size; dx++) {
+        drawPixel(startX + dx, startY + dy, r, g, b, a);
+      }
+    }
+  }
+
   function drawLine(x0, y0, x1, y1, r, g, b, a) {
     const dx = Math.abs(x1 - x0);
     const dy = Math.abs(y1 - y0);
@@ -190,12 +229,26 @@
     let err = dx - dy;
 
     while (true) {
-      drawPixel(x0, y0, r, g, b, a);
+      stampBrush(x0, y0, r, g, b, a);
       if (x0 === x1 && y0 === y1) break;
       const e2 = 2 * err;
       if (e2 > -dx) { err -= dy; x0 += sx; }
       if (e2 < dy) { err += dx; y0 += sy; }
     }
+  }
+
+  // Reads the pixel under (x, y) straight from the pixel buffer and
+  // makes it the active color. Ignores fully transparent pixels so
+  // sampling empty space doesn't wipe out the current color.
+  function pickColorAt(x, y) {
+    if (x < 0 || x >= state.width || y < 0 || y >= state.height) return;
+    const w = state.width;
+    const i = (y * w + x) * 4;
+    const a = state.pixels[i + 3];
+    if (a === 0) return;
+    const rgb = { r: state.pixels[i], g: state.pixels[i + 1], b: state.pixels[i + 2] };
+    syncWheelFromRgb(rgb);
+    applyColor(rgb);
   }
 
   function startDraw(x, y) {
@@ -206,8 +259,14 @@
     state.isDrawing = true;
     state.lastPixel = { x: px, y: py };
 
+    if (state.tool === "eyedropper") {
+      pickColorAt(px, py);
+      updatePixelStatus(px, py);
+      return;
+    }
+
     const c = currentRGBA();
-    drawPixel(px, py, c.r, c.g, c.b, c.a);
+    stampBrush(px, py, c.r, c.g, c.b, c.a);
     updatePixelStatus(px, py);
     render();
   }
@@ -221,11 +280,17 @@
     if (!state.isDrawing) return;
     if (px < 0 || px >= state.width || py < 0 || py >= state.height) return;
 
+    if (state.tool === "eyedropper") {
+      pickColorAt(px, py);
+      state.lastPixel = { x: px, y: py };
+      return;
+    }
+
     const c = currentRGBA();
     if (state.lastPixel) {
       drawLine(state.lastPixel.x, state.lastPixel.y, px, py, c.r, c.g, c.b, c.a);
     } else {
-      drawPixel(px, py, c.r, c.g, c.b, c.a);
+      stampBrush(px, py, c.r, c.g, c.b, c.a);
     }
 
     state.lastPixel = { x: px, y: py };
@@ -234,10 +299,17 @@
 
   function endDraw() {
     if (!state.isDrawing) return;
+    const wasEyedropper = state.tool === "eyedropper";
     state.isDrawing = false;
     state.lastPixel = null;
     state.activePointerId = null;
-    saveState();
+    if (wasEyedropper) {
+      // Hand control back to whichever paint tool was active before
+      // the eyedropper was picked up.
+      selectTool(state.lastPaintTool || "pencil");
+    } else {
+      saveState();
+    }
   }
 
   // Aborts an in-progress stroke without saving it to history — used
@@ -331,15 +403,16 @@
     if (touchPoints.size === 2) {
       cancelDraw();
       const pts = Array.from(touchPoints.values());
-      const startMid = touchMid(pts[0], pts[1]);
-      const anchor = toLocal(startMid.x, startMid.y, state.panX, state.panY, state.zoom, state.rotation);
+      // Rotation (and the accompanying zoom) always pivots on the
+      // canvas's own center point — not wherever the fingers land —
+      // so the paper spins in place instead of swinging around.
       gesture = {
         startDist: touchDist(pts[0], pts[1]),
         startAngle: touchAngle(pts[0], pts[1]),
         startZoom: state.zoom,
         startRotation: state.rotation,
-        anchorLx: anchor.lx,
-        anchorLy: anchor.ly,
+        anchorLx: state.width / 2,
+        anchorLy: state.height / 2,
       };
     }
   });
@@ -420,20 +493,161 @@
     setupCanvas();
   }
 
-  // ==================== COLOR ====================
-  function hexToRGBA(hex) {
+  // ==================== COLOR WHEEL ====================
+  // The wheel encodes hue as angle and saturation as radius (HSV);
+  // brightness/value is a separate slider since a 2D wheel can't show
+  // three dimensions at once. Hex field, swatch, wheel dot and slider
+  // are all kept in sync with state.color from whichever one changes.
+  let wheelHue = 0;
+  let wheelSat = 0;
+  let wheelVal = 1;
+
+  function hsvToRgb(h, s, v) {
+    const c = v * s;
+    const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+    const m = v - c;
+    let r = 0, g = 0, b = 0;
+    if (h < 60) { r = c; g = x; b = 0; }
+    else if (h < 120) { r = x; g = c; b = 0; }
+    else if (h < 180) { r = 0; g = c; b = x; }
+    else if (h < 240) { r = 0; g = x; b = c; }
+    else if (h < 300) { r = x; g = 0; b = c; }
+    else { r = c; g = 0; b = x; }
     return {
-      r: parseInt(hex.slice(1, 3), 16),
-      g: parseInt(hex.slice(3, 5), 16),
-      b: parseInt(hex.slice(5, 7), 16),
-      a: 255,
+      r: Math.round((r + m) * 255),
+      g: Math.round((g + m) * 255),
+      b: Math.round((b + m) * 255),
     };
   }
 
-  function onColorChange(e) {
-    state.color = hexToRGBA(e.target.value);
-    if (state.tool === "eraser") selectTool("pencil");
+  function rgbToHsv(r, g, b) {
+    r /= 255; g /= 255; b /= 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    const d = max - min;
+    let h = 0;
+    if (d !== 0) {
+      if (max === r) h = 60 * (((g - b) / d) % 6);
+      else if (max === g) h = 60 * ((b - r) / d + 2);
+      else h = 60 * ((r - g) / d + 4);
+    }
+    if (h < 0) h += 360;
+    const s = max === 0 ? 0 : d / max;
+    return { h: h, s: s, v: max };
   }
+
+  function rgbToHex(r, g, b) {
+    const toHex = (n) => n.toString(16).padStart(2, "0");
+    return "#" + toHex(r) + toHex(g) + toHex(b);
+  }
+
+  function drawWheel() {
+    const size = colorWheel.width;
+    const cx = size / 2, cy = size / 2, radius = size / 2;
+    const imgData = wheelCtx.createImageData(size, size);
+    const data = imgData.data;
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const dx = x - cx, dy = y - cy;
+        const dist = Math.hypot(dx, dy);
+        const i = (y * size + x) * 4;
+        if (dist <= radius) {
+          let angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+          if (angle < 0) angle += 360;
+          const sat = Math.min(dist / radius, 1);
+          const rgb = hsvToRgb(angle, sat, wheelVal);
+          data[i] = rgb.r; data[i + 1] = rgb.g; data[i + 2] = rgb.b;
+          data[i + 3] = dist <= radius - 1 ? 255 : Math.max(0, 255 * (radius - dist));
+        }
+      }
+    }
+    wheelCtx.putImageData(imgData, 0, 0);
+  }
+
+  function positionDot() {
+    const size = colorWheel.width;
+    const radius = size / 2;
+    const rad = (wheelHue * Math.PI) / 180;
+    const dist = wheelSat * radius;
+    const px = radius + Math.cos(rad) * dist;
+    const py = radius + Math.sin(rad) * dist;
+    wheelDot.style.left = (px / size) * 100 + "%";
+    wheelDot.style.top = (py / size) * 100 + "%";
+  }
+
+  function applyColor(rgb, opts) {
+    opts = opts || {};
+    state.color = { r: rgb.r, g: rgb.g, b: rgb.b, a: 255 };
+    if (state.tool === "eraser") selectTool("pencil");
+
+    const hex = rgbToHex(rgb.r, rgb.g, rgb.b);
+    colorSwatch.style.background = hex;
+    if (!opts.skipHex) hexInput.value = hex.toUpperCase();
+  }
+
+  // Sets the wheel/slider/hue-sat state from an RGB color (e.g. typed
+  // into the hex field) and redraws everything to match.
+  function syncWheelFromRgb(rgb) {
+    const hsv = rgbToHsv(rgb.r, rgb.g, rgb.b);
+    wheelHue = hsv.h;
+    wheelSat = hsv.s;
+    wheelVal = hsv.v;
+    valueSlider.value = Math.round(wheelVal * 100);
+    drawWheel();
+    positionDot();
+  }
+
+  function onWheelPointer(e) {
+    const rect = colorWheel.getBoundingClientRect();
+    const size = rect.width;
+    const radius = size / 2;
+    const dx = e.clientX - rect.left - radius;
+    const dy = e.clientY - rect.top - radius;
+    const dist = Math.min(Math.hypot(dx, dy), radius);
+    let angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+    if (angle < 0) angle += 360;
+
+    wheelHue = angle;
+    wheelSat = radius === 0 ? 0 : dist / radius;
+    positionDot();
+
+    const rgb = hsvToRgb(wheelHue, wheelSat, wheelVal);
+    applyColor(rgb);
+  }
+
+  let wheelDragging = false;
+  colorWheel.addEventListener("pointerdown", function (e) {
+    wheelDragging = true;
+    try { colorWheel.setPointerCapture(e.pointerId); } catch (err) {}
+    onWheelPointer(e);
+  });
+  colorWheel.addEventListener("pointermove", function (e) {
+    if (wheelDragging) onWheelPointer(e);
+  });
+  colorWheel.addEventListener("pointerup", function () { wheelDragging = false; });
+  colorWheel.addEventListener("pointercancel", function () { wheelDragging = false; });
+
+  valueSlider.addEventListener("input", function (e) {
+    wheelVal = parseInt(e.target.value, 10) / 100;
+    drawWheel();
+    const rgb = hsvToRgb(wheelHue, wheelSat, wheelVal);
+    applyColor(rgb);
+  });
+
+  function onHexInput() {
+    let v = hexInput.value.trim();
+    if (v[0] !== "#") v = "#" + v;
+    if (!/^#[0-9a-fA-F]{6}$/.test(v)) return;
+    const rgb = {
+      r: parseInt(v.slice(1, 3), 16),
+      g: parseInt(v.slice(3, 5), 16),
+      b: parseInt(v.slice(5, 7), 16),
+    };
+    syncWheelFromRgb(rgb);
+    applyColor(rgb, { skipHex: true });
+    hexInput.value = v.toUpperCase();
+  }
+  hexInput.addEventListener("change", onHexInput);
+  hexInput.addEventListener("blur", onHexInput);
 
   // ==================== MIRROR ====================
   function toggleMirrorX() {
@@ -452,16 +666,28 @@
     applyTransform();
   }
 
+  // Rotation always pivots around the canvas's own center point,
+  // regardless of current pan/zoom, by re-solving pan so that the
+  // screen position of (width/2, height/2) doesn't move.
   function rotateBy(deltaDeg) {
+    const cx = state.width / 2;
+    const cy = state.height / 2;
+    const before = toScreenOffset(cx, cy, state.zoom, state.rotation);
+    const screenX = state.panX + before.x;
+    const screenY = state.panY + before.y;
+
     state.rotation += deltaDeg;
+
+    const after = toScreenOffset(cx, cy, state.zoom, state.rotation);
+    state.panX = screenX - after.x;
+    state.panY = screenY - after.y;
     applyTransform();
   }
 
   function resetView() {
-    state.panX = 0;
-    state.panY = 0;
     state.rotation = 0;
     state.zoom = parseInt(zoomSelect.value, 10) || 4;
+    centerCanvas();
     applyTransform();
   }
 
@@ -502,9 +728,8 @@
         displayCanvas.style.width = state.width + "px";
         displayCanvas.style.height = state.height + "px";
 
-        state.panX = 0;
-        state.panY = 0;
         state.rotation = 0;
+        centerCanvas();
         state.undoStack = [];
         state.redoStack = [];
         saveState();
@@ -561,6 +786,7 @@
     } else if (!e.ctrlKey && !e.metaKey && !e.altKey) {
       if (e.key === "p" || e.key === "P") selectTool("pencil");
       else if (e.key === "e" || e.key === "E") selectTool("eraser");
+      else if (e.key === "i" || e.key === "I") selectTool("eyedropper");
       else if (e.key === "m" || e.key === "M") toggleMirrorX();
       else if (e.key === "n" || e.key === "N") toggleMirrorY();
       else if (e.key === "[") rotateBy(-15);
@@ -570,15 +796,34 @@
 
   // ==================== TOOL SELECTION ====================
   function selectTool(tool) {
+    if (tool !== "eyedropper") state.lastPaintTool = tool;
     state.tool = tool;
     btnPencil.classList.toggle("active", tool === "pencil");
     btnEraser.classList.toggle("active", tool === "eraser");
-    canvasWrapper.style.cursor = tool === "eraser" ? "cell" : "crosshair";
+    btnEyedropper.classList.toggle("active", tool === "eyedropper");
+    canvasWrapper.style.cursor =
+      tool === "eraser" ? "cell" : tool === "eyedropper" ? "copy" : "crosshair";
+  }
+
+  // ==================== BRUSH SIZE (shared: pencil + eraser) ====================
+  function onBrushSizeChange(e) {
+    state.brushSize = parseInt(e.target.value, 10) || 1;
+    brushSizeValue.textContent = state.brushSize + "px";
+  }
+
+  // ==================== TOOLBAR COLLAPSE/EXPAND ====================
+  function toggleToolbar() {
+    const collapsed = toolbar.classList.toggle("collapsed");
+    toolbarToggle.setAttribute("data-collapsed", collapsed ? "true" : "false");
+    toolbarToggle.title = collapsed ? "Expand toolbar" : "Collapse toolbar";
   }
 
   // ==================== EVENT BINDINGS ====================
   btnPencil.addEventListener("click", function () { selectTool("pencil"); });
   btnEraser.addEventListener("click", function () { selectTool("eraser"); });
+  btnEyedropper.addEventListener("click", function () { selectTool("eyedropper"); });
+  brushSizeSlider.addEventListener("input", onBrushSizeChange);
+  toolbarToggle.addEventListener("click", toggleToolbar);
   btnMirrorX.addEventListener("click", toggleMirrorX);
   btnMirrorY.addEventListener("click", toggleMirrorY);
   btnNew.addEventListener("click", createNewCanvas);
@@ -591,7 +836,6 @@
   btnImport.addEventListener("click", onImportClick);
   btnExport.addEventListener("click", exportPNG);
   fileInput.addEventListener("change", onFileChange);
-  colorPicker.addEventListener("input", onColorChange);
   window.addEventListener("keydown", onKeyDown);
 
   displayCanvas.addEventListener("contextmenu", function (e) { e.preventDefault(); });
@@ -606,5 +850,14 @@
   }, { passive: false });
 
   // ==================== INIT ====================
+  syncWheelFromRgb(state.color);
+  colorSwatch.style.background = rgbToHex(state.color.r, state.color.g, state.color.b);
   setupCanvas();
+
+  window.addEventListener("resize", function () {
+    // Keep the canvas roughly centered as the workspace is resized,
+    // e.g. rotating a phone or resizing the browser window.
+    centerCanvas();
+    applyTransform();
+  });
 })();

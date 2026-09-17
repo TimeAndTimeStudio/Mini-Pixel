@@ -19,6 +19,12 @@
       </div>
     </div>
 
+    <div id="toolbar-dock">
+      <button id="toolbar-toggle" data-collapsed="false" title="Collapse/expand toolbar">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
     <aside id="toolbar">
       <span class="brand">
         <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -43,13 +49,34 @@
           </svg>
           Eraser
         </button>
+        <button id="btn-eyedropper" class="tool-btn" title="Eyedropper (I)">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M17.5 2.5a2.7 2.7 0 0 1 3.8 3.8l-2 2-3.8-3.8 2-2z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+            <path d="M15.5 6.3L5.8 16l-1.3 4.5 4.5-1.3L18.7 9.5" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+            <path d="M4.5 20.5l1.3-4.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+          </svg>
+          Eyedropper
+        </button>
+        <div class="row" id="size-row">
+          <label for="brush-size-slider">Size</label>
+          <input type="range" id="brush-size-slider" min="1" max="16" value="1" title="Brush size (shared by pencil &amp; eraser)">
+          <span id="brush-size-value">1px</span>
+        </div>
       </div>
       <div class="divider"></div>
 
       <div class="group" id="color-group">
         <span class="group-label">Color</span>
-        <div id="color-swatch-wrap" title="Color">
-          <input type="color" id="color-picker" value="#5eead4">
+        <div id="wheel-wrap">
+          <canvas id="color-wheel" width="152" height="152"></canvas>
+          <div id="wheel-dot"></div>
+        </div>
+        <input type="range" id="value-slider" min="0" max="100" value="100" title="Brightness">
+        <div class="row">
+          <div id="color-swatch-wrap" title="Current color">
+            <div id="color-swatch"></div>
+          </div>
+          <input type="text" id="hex-input" value="#5EEAD4" maxlength="7" spellcheck="false">
         </div>
       </div>
       <div class="divider"></div>
@@ -167,6 +194,7 @@
         <input type="file" id="file-input" accept="image/png">
       </div>
     </aside>
+    </div>
   </div>
   <script src="app.js"></script>
 </body>
