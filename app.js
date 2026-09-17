@@ -425,16 +425,28 @@
     if (state.activePointerId === null) statusPixel.textContent = "\u2014";
   });
 
-  // ==================== PAN (mouse, middle- or right-drag) ====================
+  // ==================== PAN (mouse, right-drag) / ROTATE (mouse, middle-drag) ====================
   let isPanning = false;
   let panStartX = 0;
   let panStartY = 0;
   let panPointerId = null;
 
+  let isRotating = false;
+  let rotatePointerId = null;
+  let rotateStartClientX = 0;
+  let rotateStartRotation = 0;
+
   canvasWrapper.addEventListener("contextmenu", function (e) { e.preventDefault(); });
 
   canvasWrapper.addEventListener("pointerdown", function (e) {
-    if (e.button === 1 || e.button === 2) {
+    if (e.button === 1) {
+      isRotating = true;
+      rotatePointerId = e.pointerId;
+      rotateStartClientX = e.clientX;
+      rotateStartRotation = state.rotation;
+      canvasWrapper.style.cursor = "grabbing";
+      e.preventDefault();
+    } else if (e.button === 2) {
       isPanning = true;
       panPointerId = e.pointerId;
       panStartX = e.clientX - state.panX;
@@ -449,6 +461,21 @@
       state.panX = e.clientX - panStartX;
       state.panY = e.clientY - panStartY;
       applyTransform();
+    } else if (isRotating && e.pointerId === rotatePointerId) {
+      // Pivots on the canvas's own center (same as rotateBy/touch),
+      // driven by how far the mouse has dragged horizontally.
+      const cx = state.width / 2;
+      const cy = state.height / 2;
+      const before = toScreenOffset(cx, cy, state.zoom, state.rotation);
+      const screenX = state.panX + before.x;
+      const screenY = state.panY + before.y;
+
+      state.rotation = rotateStartRotation + (e.clientX - rotateStartClientX) * 0.5;
+
+      const after = toScreenOffset(cx, cy, state.zoom, state.rotation);
+      state.panX = screenX - after.x;
+      state.panY = screenY - after.y;
+      applyTransform();
     }
   });
 
@@ -456,6 +483,10 @@
     if (isPanning && e.pointerId === panPointerId) {
       isPanning = false;
       panPointerId = null;
+      canvasWrapper.style.cursor = state.tool === "eraser" ? "cell" : "crosshair";
+    } else if (isRotating && e.pointerId === rotatePointerId) {
+      isRotating = false;
+      rotatePointerId = null;
       canvasWrapper.style.cursor = state.tool === "eraser" ? "cell" : "crosshair";
     }
   });
