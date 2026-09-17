@@ -59,13 +59,7 @@
             <span class="sr-only">Redo</span>
           </button>
           <span class="topbar-divider"></span>
-          <button id="btn-new" class="icon-btn" title="New canvas">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <path d="M6 3h9l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
-              <path d="M12 11v6M9 14h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-            </svg>
-            <span class="sr-only">New canvas</span>
-          </button>
+          <span id="topbar-canvas-anchor"></span>
           <span class="topbar-divider"></span>
           <button id="btn-import" class="icon-btn" title="Import PNG">
             <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -238,8 +232,17 @@
           <label for="input-height">H</label>
           <input type="number" id="input-height" value="64" min="1" max="2048">
         </div>
+        <div class="row icon-row">
+          <button id="btn-new" class="icon-btn" title="New canvas">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M6 3h9l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+              <path d="M12 11v6M9 14h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            </svg>
+            <span class="sr-only">New canvas</span>
+          </button>
+        </div>
       </div>
-      <div class="divider"></div>
+      <div class="divider" id="size-group-end-divider"></div>
 
       <div class="group" id="frames-group">
         <div class="row" id="frame-nav-row">

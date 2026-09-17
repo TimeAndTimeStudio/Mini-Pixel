@@ -54,6 +54,21 @@ button:focus-visible, input:focus-visible, select:focus-visible{
 .topbar-divider{width:1px;align-self:stretch;background:var(--line);flex-shrink:0;margin:2px 2px;}
 #topbar #file-input{display:none;}
 
+/* "Canvas creation" group (New canvas + W/H). On mobile it lives in
+   the sidebar next to the size controls it belongs with; on desktop
+   app.js moves the same DOM node into the topbar here, so styling it
+   fully self-contained for either parent avoids any duplicated
+   markup or state to keep in sync. */
+#topbar #size-group{
+  display:flex;flex-direction:row;align-items:center;gap:6px;flex-shrink:0;
+}
+#topbar #size-group .row{width:auto;display:flex;align-items:center;gap:4px;}
+#topbar #size-group label{font-size:11px;color:var(--text-dim);}
+#topbar #size-group input[type="number"]{
+  width:46px;padding:4px 2px;border:1px solid var(--ink-600);border-radius:6px;
+  background:var(--ink-800);color:var(--text);font-size:11.5px;text-align:center;
+}
+
 /* Bottom bar: primary drawing tools (pencil/eraser/eyedropper + brush
    size), kept close to the canvas for quick thumb reach. Bottom
    padding includes the safe-area inset so it isn't covered by a

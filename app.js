@@ -57,6 +57,9 @@
   const btnMirrorX = document.getElementById("btn-mirror-x");
   const btnMirrorY = document.getElementById("btn-mirror-y");
   const btnNew = document.getElementById("btn-new");
+  const sizeGroup = document.getElementById("size-group");
+  const sizeGroupEndDivider = document.getElementById("size-group-end-divider");
+  const topbarCanvasAnchor = document.getElementById("topbar-canvas-anchor");
   const zoomSelect = document.getElementById("zoom-select");
   const btnRotateLeft = document.getElementById("btn-rotate-left");
   const btnRotateRight = document.getElementById("btn-rotate-right");
@@ -1289,6 +1292,30 @@
   btnRotateLeft.addEventListener("click", function () { rotateBy(-15); });
   btnRotateRight.addEventListener("click", function () { rotateBy(15); });
   btnResetView.addEventListener("click", resetView);
+
+  // ==================== CANVAS-CREATE GROUP PLACEMENT ====================
+  // The "New canvas" button + W/H inputs are a single DOM node
+  // (#size-group). On mobile it stays in the sidebar next to the
+  // resize controls it belongs with; on desktop it moves into the
+  // topbar instead. Moving the same node (rather than duplicating
+  // markup) means there's only one set of inputs/listeners to keep
+  // in sync.
+  const desktopLayoutQuery = window.matchMedia("(min-width: 481px)");
+  function placeCanvasCreateGroup(isDesktop) {
+    if (isDesktop) {
+      if (sizeGroup.parentElement !== topbarCanvasAnchor.parentElement) {
+        topbarCanvasAnchor.parentElement.insertBefore(sizeGroup, topbarCanvasAnchor);
+      }
+    } else {
+      if (sizeGroup.nextElementSibling !== sizeGroupEndDivider) {
+        sizeGroupEndDivider.parentElement.insertBefore(sizeGroup, sizeGroupEndDivider);
+      }
+    }
+  }
+  placeCanvasCreateGroup(desktopLayoutQuery.matches);
+  desktopLayoutQuery.addEventListener("change", function (e) {
+    placeCanvasCreateGroup(e.matches);
+  });
 
   // ==================== DOCS OVERLAY ====================
   const docsOverlay = document.getElementById("docs-overlay");
