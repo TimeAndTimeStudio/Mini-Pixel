@@ -9,6 +9,7 @@ Made by **Time And Time Studio**.
 - **Draw & erase** — Pencil, Eraser, and Eyedropper tools with an adjustable 1–64px brush size (shared between pencil and eraser).
 - **Full color control** — a color wheel with a brightness slider, plus a hex input for exact colors.
 - **Mirror / symmetry drawing** — Mirror X and Mirror Y for symmetrical sprites and patterns.
+- **Select, move & snap** — drag out a rectangular selection and drag inside it to move the pixels. While moving, the selection snaps to the canvas center and edges, guide lines light up when aligned, and the status bar shows its position plus the offset of its center from the canvas center. Hold `Alt` to bypass snapping; `C` toggles the guides.
 - **Undo / redo** — full history so you can experiment freely.
 - **Resizable canvas** — set any custom width and height.
 - **Multi-frame animation** — add, copy, and delete frames; preview at any FPS; export every frame at once.
@@ -25,6 +26,8 @@ Made by **Time And Time Studio**.
 | `P` | Pencil |
 | `E` | Eraser |
 | `I` | Eyedropper |
+| `C` | Toggle snap & center guides |
+| `Alt` (dragging a selection) | Move without snapping |
 | `M` | Toggle Mirror X |
 | `N` | Toggle Mirror Y |
 | `[` / `]` | Rotate view left / right |

@@ -30,6 +30,8 @@
     selecting: null, // {startX, startY} while a marquee drag is in progress
     floating: null, // {data, x, y, w, h} the picked-up selection while it's being moved
     movingSelection: null, // {startX, startY, origX, origY} while dragging a floating selection
+    snapEnabled: true, // snap-to-canvas-center/edges + alignment guides while moving a selection
+    snapGuides: null, // {x, y} each 'start' | 'center' | 'end' | null - axes currently aligned
   };
 
   const MIN_ZOOM = 0.5;
@@ -43,6 +45,7 @@
   const btnSelect = document.getElementById("btn-select");
   const btnGrid = document.getElementById("btn-grid");
   const btnOnion = document.getElementById("btn-onion");
+  const btnSnap = document.getElementById("btn-snap");
   const inputWidth = document.getElementById("input-width");
   const inputHeight = document.getElementById("input-height");
   const colorWheel = document.getElementById("color-wheel");
@@ -330,6 +333,44 @@
       overlayCtx.stroke();
       overlayCtx.setLineDash([]);
     }
+
+    // Placement guides, only while a selection is being dragged.
+    if (state.movingSelection && state.floating && state.snapEnabled) {
+      const f = state.floating;
+      function strokeLine(a, b, style, width, dash) {
+        overlayCtx.beginPath();
+        overlayCtx.moveTo(a.x, a.y);
+        overlayCtx.lineTo(b.x, b.y);
+        overlayCtx.setLineDash(dash || []);
+        overlayCtx.strokeStyle = style;
+        overlayCtx.lineWidth = width;
+        overlayCtx.stroke();
+        overlayCtx.setLineDash([]);
+      }
+      function vLine(lx, style, width, dash) {
+        strokeLine(toScreen(lx, 0), toScreen(lx, h), "rgba(0,0,0,0.55)", width + 1.5, dash);
+        strokeLine(toScreen(lx, 0), toScreen(lx, h), style, width, dash);
+      }
+      function hLine(ly, style, width, dash) {
+        strokeLine(toScreen(0, ly), toScreen(w, ly), "rgba(0,0,0,0.55)", width + 1.5, dash);
+        strokeLine(toScreen(0, ly), toScreen(w, ly), style, width, dash);
+      }
+      const REF = "rgba(255,255,255,0.55)";
+      const HOT = "rgba(255,79,216,1)";
+      const g = state.snapGuides || {};
+      // Faint dashed reference lines through the canvas center.
+      vLine(w / 2, REF, 1, [4, 4]);
+      hLine(h / 2, REF, 1, [4, 4]);
+      // Lit-up guides for whichever axes are currently aligned.
+      if (g.x) vLine(g.x === "center" ? w / 2 : g.x === "start" ? 0 : w, HOT, 1.5);
+      if (g.y) hLine(g.y === "center" ? h / 2 : g.y === "start" ? 0 : h, HOT, 1.5);
+      // Small cross marking the selection's own center.
+      const c = toScreen(f.x + f.w / 2, f.y + f.h / 2);
+      strokeLine({ x: c.x - 6, y: c.y }, { x: c.x + 6, y: c.y }, "rgba(0,0,0,0.7)", 3.5);
+      strokeLine({ x: c.x, y: c.y - 6 }, { x: c.x, y: c.y + 6 }, "rgba(0,0,0,0.7)", 3.5);
+      strokeLine({ x: c.x - 6, y: c.y }, { x: c.x + 6, y: c.y }, HOT, 1.5);
+      strokeLine({ x: c.x, y: c.y - 6 }, { x: c.x, y: c.y + 6 }, HOT, 1.5);
+    }
   }
 
   function normalizeRect(x0, y0, x1, y1) {
@@ -342,6 +383,70 @@
 
   function pointInRect(px, py, r) {
     return px >= r.x && px < r.x + r.w && py >= r.y && py < r.y + r.h;
+  }
+
+  // ==================== PLACEMENT AIDS (snap + guides) ====================
+  // While a selection is being moved, its position is compared against
+  // the canvas' start edge (0), center and end edge on each axis. Within
+  // a small screen-space threshold it snaps there, and the matching
+  // guide line is lit up in the overlay. Holding Alt bypasses snapping
+  // (guides still light up on an exact match).
+  const SNAP_SCREEN_PX = 8;
+  const SNAP_MAX_CELLS = 6;
+  let altHeld = false;
+
+  function snapAxis(pos, size, canvasSize, allowSnap) {
+    // Candidate positions for the selection's top-left on this axis.
+    const cands = [
+      { kind: "center", v: Math.floor((canvasSize - size) / 2) },
+      { kind: "start", v: 0 },
+      { kind: "end", v: canvasSize - size },
+    ];
+    // Snap radius in canvas cells: ~8 screen px, so it feels the same
+    // at any zoom. At high zoom it collapses to 0 (exact match only).
+    const thr = Math.min(SNAP_MAX_CELLS, Math.floor(SNAP_SCREEN_PX / state.zoom));
+    let out = pos;
+    if (allowSnap) {
+      let best = null;
+      cands.forEach(function (c) {
+        const d = Math.abs(pos - c.v);
+        if (d <= thr && (!best || d < best.d)) best = { d: d, v: c.v };
+      });
+      if (best) out = best.v;
+    }
+    // Which guide (if any) is the final position aligned with?
+    let guide = null;
+    if (Math.abs(2 * out + size - canvasSize) <= 1) guide = "center"; // within half a pixel
+    else if (out === 0) guide = "start";
+    else if (out + size === canvasSize) guide = "end";
+    return { pos: out, guide: guide };
+  }
+
+  function computeMovePlacement(rawX, rawY, f) {
+    const allowSnap = state.snapEnabled && !altHeld;
+    const sx = snapAxis(rawX, f.w, state.width, allowSnap);
+    const sy = snapAxis(rawY, f.h, state.height, allowSnap);
+    return { x: sx.pos, y: sy.pos, guides: state.snapEnabled ? { x: sx.guide, y: sy.guide } : null };
+  }
+
+  function fmtNum(n) {
+    return Number.isInteger(n) ? String(n) : n.toFixed(1);
+  }
+
+  // Status bar readout: position, size, and offset of the selection's
+  // center from the canvas center (0, 0 means perfectly centered).
+  function updateSelectionStatus(r, guides) {
+    const dx = r.x + r.w / 2 - state.width / 2;
+    const dy = r.y + r.h / 2 - state.height / 2;
+    let txt = "Sel (" + r.x + ", " + r.y + ") " + r.w + "\u00d7" + r.h +
+      " \u00b7 center \u0394 (" + fmtNum(dx) + ", " + fmtNum(dy) + ")";
+    if (guides) {
+      const tags = [];
+      if (guides.x === "center") tags.push("X centered");
+      if (guides.y === "center") tags.push("Y centered");
+      if (tags.length) txt += " \u00b7 " + tags.join(", ");
+    }
+    statusPixel.textContent = txt;
   }
 
   // Lifts the pixels inside `rect` off the buffer into a floating
@@ -399,6 +504,7 @@
     state.selection = null;
     state.selecting = null;
     state.movingSelection = null;
+    state.snapGuides = null;
     if (hadFloating) saveState();
   }
 
@@ -608,12 +714,20 @@
       if (state.movingSelection) {
         const dx = px - state.movingSelection.startX;
         const dy = py - state.movingSelection.startY;
-        state.floating.x = state.movingSelection.origX + dx;
-        state.floating.y = state.movingSelection.origY + dy;
+        const placed = computeMovePlacement(
+          state.movingSelection.origX + dx,
+          state.movingSelection.origY + dy,
+          state.floating
+        );
+        state.floating.x = placed.x;
+        state.floating.y = placed.y;
+        state.snapGuides = placed.guides;
         render();
+        updateSelectionStatus(state.floating, placed.guides);
       } else if (state.selecting) {
         state.selection = normalizeRect(state.selecting.startX, state.selecting.startY, px, py);
         render();
+        updateSelectionStatus(state.selection, null);
       }
       return;
     }
@@ -648,6 +762,7 @@
     if (wasSelect) {
       if (state.movingSelection) {
         state.movingSelection = null;
+        state.snapGuides = null;
         commitFloating();
         saveState();
         render();
@@ -681,6 +796,7 @@
     state.activePointerId = null;
     state.selecting = null;
     state.movingSelection = null;
+    state.snapGuides = null;
   }
 
   function updatePixelStatus(x, y) {
@@ -1154,6 +1270,13 @@
   function toggleGrid() {
     state.showGrid = !state.showGrid;
     btnGrid.classList.toggle("active", state.showGrid);
+    renderOverlay();
+  }
+
+  function toggleSnap() {
+    state.snapEnabled = !state.snapEnabled;
+    if (!state.snapEnabled) state.snapGuides = null;
+    btnSnap.classList.toggle("active", state.snapEnabled);
     renderOverlay();
   }
 
@@ -1677,6 +1800,7 @@
       else if (e.key === "s" || e.key === "S") selectTool("select");
       else if (e.key === "g" || e.key === "G") toggleGrid();
       else if (e.key === "o" || e.key === "O") toggleOnionSkin();
+      else if (e.key === "c" || e.key === "C") toggleSnap();
       else if (e.key === "m" || e.key === "M") toggleMirrorX();
       else if (e.key === "n" || e.key === "N") toggleMirrorY();
       else if (e.key === "[") rotateBy(-15);
@@ -1748,6 +1872,12 @@
   btnSelect.addEventListener("click", function () { selectTool("select"); });
   btnGrid.addEventListener("click", toggleGrid);
   btnOnion.addEventListener("click", toggleOnionSkin);
+  btnSnap.addEventListener("click", toggleSnap);
+
+  // Alt bypasses snapping while a selection is being dragged.
+  window.addEventListener("keydown", function (e) { if (e.key === "Alt") altHeld = true; });
+  window.addEventListener("keyup", function (e) { if (e.key === "Alt") altHeld = false; });
+  window.addEventListener("blur", function () { altHeld = false; });
   toolbarToggle.addEventListener("click", toggleToolbar);
   btnFramePrev.addEventListener("click", function () { stopPlayback(); goToFrame(state.currentFrame - 1); });
   btnFrameNext.addEventListener("click", function () { stopPlayback(); goToFrame(state.currentFrame + 1); });
