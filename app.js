@@ -439,6 +439,7 @@
     const dx = r.x + r.w / 2 - state.width / 2;
     const dy = r.y + r.h / 2 - state.height / 2;
     let txt = "Sel (" + r.x + ", " + r.y + ") " + r.w + "\u00d7" + r.h +
+      " \u00b7 end (" + (r.x + r.w) + ", " + (r.y + r.h) + ")" +
       " \u00b7 center \u0394 (" + fmtNum(dx) + ", " + fmtNum(dy) + ")";
     if (guides) {
       const tags = [];
