@@ -278,8 +278,6 @@
     }
 
     if (state.showGrid && state.zoom >= 2) {
-      overlayCtx.strokeStyle = "rgba(255,255,255,0.4)";
-      overlayCtx.lineWidth = 1;
       overlayCtx.beginPath();
       for (let x = 0; x <= w; x++) {
         const p1 = toScreen(x, 0), p2 = toScreen(x, h);
@@ -291,6 +289,16 @@
         overlayCtx.moveTo(p1.x, p1.y);
         overlayCtx.lineTo(p2.x, p2.y);
       }
+      // Stroke the same path twice — a darker, slightly wider line
+      // first, then a lighter, thinner one on top of it — so a thin
+      // contrasting rim is left on both sides. That keeps the grid
+      // readable over both light and dark pixel colors, instead of
+      // disappearing against a light theme or light artwork.
+      overlayCtx.strokeStyle = "rgba(0,0,0,0.45)";
+      overlayCtx.lineWidth = 2;
+      overlayCtx.stroke();
+      overlayCtx.strokeStyle = "rgba(255,255,255,0.55)";
+      overlayCtx.lineWidth = 1;
       overlayCtx.stroke();
     }
 
