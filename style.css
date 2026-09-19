@@ -114,6 +114,11 @@ input[type="number"]{-moz-appearance:textfield;appearance:textfield;}
   image-rendering:pixelated;image-rendering:crisp-edges;
   box-shadow:0 0 0 1px var(--line), 0 8px 30px rgba(120,80,20,.25);
 }
+#overlay-canvas{
+  position:absolute;top:0;left:0;
+  image-rendering:pixelated;image-rendering:crisp-edges;
+  pointer-events:none;
+}
 
 #statusbar{
   display:flex;align-items:center;justify-content:space-between;
@@ -210,6 +215,9 @@ button.icon-btn .icon{width:16px;height:16px;}
   background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600;
 }
 .mirror-btn.active{
+  background:var(--ink-600);border-color:var(--accent-strong);color:var(--accent-ink);
+}
+.aid-btn.active{
   background:var(--ink-600);border-color:var(--accent-strong);color:var(--accent-ink);
 }
 

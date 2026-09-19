@@ -23,6 +23,13 @@
     isDrawing: false,
     lastPixel: null,
     activePointerId: null,
+    showGrid: true,
+    onionSkin: false,
+    hoverPixel: null, // {x, y} last hovered cell, or null when pointer is off-canvas
+    selection: null, // {x, y, w, h} in pixel coords, or null
+    selecting: null, // {startX, startY} while a marquee drag is in progress
+    floating: null, // {data, x, y, w, h} the picked-up selection while it's being moved
+    movingSelection: null, // {startX, startY, origX, origY} while dragging a floating selection
   };
 
   const MIN_ZOOM = 0.5;
@@ -31,6 +38,11 @@
   // ==================== DOM REFS ====================
   const displayCanvas = document.getElementById("display-canvas");
   const ctx = displayCanvas.getContext("2d");
+  const overlayCanvas = document.getElementById("overlay-canvas");
+  const overlayCtx = overlayCanvas.getContext("2d");
+  const btnSelect = document.getElementById("btn-select");
+  const btnGrid = document.getElementById("btn-grid");
+  const btnOnion = document.getElementById("btn-onion");
   const inputWidth = document.getElementById("input-width");
   const inputHeight = document.getElementById("input-height");
   const colorWheel = document.getElementById("color-wheel");
@@ -118,10 +130,17 @@
     displayCanvas.style.width = w + "px";
     displayCanvas.style.height = h + "px";
 
+    overlayCanvas.width = w;
+    overlayCanvas.height = h;
+    overlayCanvas.style.width = w + "px";
+    overlayCanvas.style.height = h + "px";
+
     ctx.imageSmoothingEnabled = false;
+    overlayCtx.imageSmoothingEnabled = false;
 
     state.rotation = 0;
     centerCanvas();
+    clearSelection();
 
     state.undoStack = [];
     state.redoStack = [];
@@ -142,31 +161,216 @@
   }
 
   // ==================== RENDER ====================
+  // Scratch canvas reused for onion-skin layers and for compositing
+  // the current frame itself, so drawImage() (which respects alpha,
+  // unlike putImageData) can layer everything with correct transparency.
+  const scratchCanvas = document.createElement("canvas");
+  const scratchCtx = scratchCanvas.getContext("2d");
+
+  function drawFrameLayer(pixels, w, h, alpha, tint, dx, dy) {
+    scratchCanvas.width = w;
+    scratchCanvas.height = h;
+    scratchCtx.clearRect(0, 0, w, h);
+    const imgData = scratchCtx.createImageData(w, h);
+    imgData.data.set(pixels);
+    scratchCtx.putImageData(imgData, 0, 0);
+    if (tint) {
+      scratchCtx.globalCompositeOperation = "source-atop";
+      scratchCtx.fillStyle = tint;
+      scratchCtx.fillRect(0, 0, w, h);
+      scratchCtx.globalCompositeOperation = "source-over";
+    }
+    ctx.globalAlpha = alpha;
+    ctx.drawImage(scratchCanvas, dx || 0, dy || 0);
+    ctx.globalAlpha = 1;
+  }
+
   function render() {
     const w = state.width;
     const h = state.height;
 
-    const imgData = ctx.createImageData(w, h);
-    imgData.data.set(state.pixels);
-    ctx.putImageData(imgData, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+
+    if (state.onionSkin) {
+      const prev = state.frames[state.currentFrame - 1];
+      const next = state.frames[state.currentFrame + 1];
+      if (prev) drawFrameLayer(prev, w, h, 0.35, "#3b82f6"); // previous frame, blue
+      if (next) drawFrameLayer(next, w, h, 0.35, "#f97316"); // next frame, orange
+    }
+
+    drawFrameLayer(state.pixels, w, h, 1, null);
+
+    // A selection currently picked up and being dragged floats on top
+    // of the (already-cleared) pixel buffer underneath it.
+    if (state.floating) {
+      drawFrameLayer(state.floating.data, state.floating.w, state.floating.h, 1, null, state.floating.x, state.floating.y);
+    }
 
     applyTransform();
     updateHistoryButtons();
+    renderOverlay();
+  }
+
+  // ==================== OVERLAY (grid, hover cell, selection) ====================
+  // Drawn on a separate canvas stacked on top of the display canvas so
+  // none of it ever touches the actual pixel data. It shares the exact
+  // same CSS transform as the display canvas (see applyTransform), so
+  // line widths are given in "1 / zoom" units to stay a crisp ~1 CSS
+  // pixel wide on screen no matter how far zoomed in or out we are.
+  function renderOverlay() {
+    const w = state.width;
+    const h = state.height;
+    overlayCtx.clearRect(0, 0, w, h);
+
+    const lw = Math.max(0.001, 1 / state.zoom);
+
+    if (state.showGrid && state.zoom >= 4) {
+      overlayCtx.strokeStyle = "rgba(255,255,255,0.16)";
+      overlayCtx.lineWidth = lw;
+      overlayCtx.beginPath();
+      for (let x = 0; x <= w; x++) {
+        overlayCtx.moveTo(x, 0);
+        overlayCtx.lineTo(x, h);
+      }
+      for (let y = 0; y <= h; y++) {
+        overlayCtx.moveTo(0, y);
+        overlayCtx.lineTo(w, y);
+      }
+      overlayCtx.stroke();
+    }
+
+    if (state.hoverPixel && !state.isDrawing) {
+      const hx = state.hoverPixel.x;
+      const hy = state.hoverPixel.y;
+      if (hx >= 0 && hx < w && hy >= 0 && hy < h) {
+        overlayCtx.strokeStyle = "rgba(255,255,255,0.9)";
+        overlayCtx.lineWidth = Math.max(lw, 1.5 / state.zoom);
+        overlayCtx.strokeRect(hx + lw / 2, hy + lw / 2, 1 - lw, 1 - lw);
+      }
+    }
+
+    const sel = state.floating
+      ? { x: state.floating.x, y: state.floating.y, w: state.floating.w, h: state.floating.h }
+      : state.selection;
+    if (sel) {
+      overlayCtx.fillStyle = "rgba(94,234,212,0.15)";
+      overlayCtx.fillRect(sel.x, sel.y, sel.w, sel.h);
+      overlayCtx.strokeStyle = "rgba(94,234,212,0.95)";
+      overlayCtx.lineWidth = 2 / state.zoom;
+      overlayCtx.setLineDash([4 / state.zoom, 3 / state.zoom]);
+      overlayCtx.strokeRect(sel.x, sel.y, sel.w, sel.h);
+      overlayCtx.setLineDash([]);
+    }
+  }
+
+  function normalizeRect(x0, y0, x1, y1) {
+    const x = Math.min(x0, x1);
+    const y = Math.min(y0, y1);
+    const w = Math.abs(x1 - x0) + 1;
+    const h = Math.abs(y1 - y0) + 1;
+    return { x: x, y: y, w: w, h: h };
+  }
+
+  function pointInRect(px, py, r) {
+    return px >= r.x && px < r.x + r.w && py >= r.y && py < r.y + r.h;
+  }
+
+  // Lifts the pixels inside `rect` off the buffer into a floating
+  // layer (clearing them from state.pixels underneath), so they can be
+  // dragged around without touching the rest of the drawing.
+  function liftSelectionToFloating(rect) {
+    const w = state.width, h = state.height;
+    const data = new Uint8Array(rect.w * rect.h * 4);
+    for (let y = 0; y < rect.h; y++) {
+      const sy = rect.y + y;
+      if (sy < 0 || sy >= h) continue;
+      for (let x = 0; x < rect.w; x++) {
+        const sx = rect.x + x;
+        if (sx < 0 || sx >= w) continue;
+        const si = (sy * w + sx) * 4;
+        const di = (y * rect.w + x) * 4;
+        data[di] = state.pixels[si];
+        data[di + 1] = state.pixels[si + 1];
+        data[di + 2] = state.pixels[si + 2];
+        data[di + 3] = state.pixels[si + 3];
+        state.pixels[si] = 0; state.pixels[si + 1] = 0; state.pixels[si + 2] = 0; state.pixels[si + 3] = 0;
+      }
+    }
+    state.floating = { data: data, x: rect.x, y: rect.y, w: rect.w, h: rect.h };
+  }
+
+  // Stamps a floating selection back into the pixel buffer at its
+  // current position, clipping anything that's been dragged off-canvas.
+  function commitFloating() {
+    if (!state.floating) return;
+    const f = state.floating;
+    const w = state.width, h = state.height;
+    for (let y = 0; y < f.h; y++) {
+      const dy = f.y + y;
+      if (dy < 0 || dy >= h) continue;
+      for (let x = 0; x < f.w; x++) {
+        const dx = f.x + x;
+        if (dx < 0 || dx >= w) continue;
+        const si = (y * f.w + x) * 4;
+        if (f.data[si + 3] === 0) continue; // don't paint transparent gaps over existing pixels
+        const di = (dy * w + dx) * 4;
+        state.pixels[di] = f.data[si];
+        state.pixels[di + 1] = f.data[si + 1];
+        state.pixels[di + 2] = f.data[si + 2];
+        state.pixels[di + 3] = f.data[si + 3];
+      }
+    }
+    state.selection = { x: f.x, y: f.y, w: f.w, h: f.h };
+    state.floating = null;
+  }
+
+  function clearSelection() {
+    const hadFloating = !!state.floating;
+    if (state.floating) commitFloating();
+    state.selection = null;
+    state.selecting = null;
+    state.movingSelection = null;
+    if (hadFloating) saveState();
+  }
+
+  // Erases the pixels under the current selection (Delete/Backspace).
+  function deleteSelectionContents() {
+    if (state.floating) { state.floating = null; saveState(); render(); return; }
+    if (!state.selection) return;
+    const r = state.selection;
+    const w = state.width, h = state.height;
+    for (let y = 0; y < r.h; y++) {
+      const py = r.y + y;
+      if (py < 0 || py >= h) continue;
+      for (let x = 0; x < r.w; x++) {
+        const px = r.x + x;
+        if (px < 0 || px >= w) continue;
+        const i = (py * w + px) * 4;
+        state.pixels[i] = 0; state.pixels[i + 1] = 0; state.pixels[i + 2] = 0; state.pixels[i + 3] = 0;
+      }
+    }
+    saveState();
+    render();
   }
 
   // Only updates the view transform + status text, skipping the
   // (relatively expensive) pixel buffer -> canvas upload. Used while
   // panning/zooming/rotating, where the pixel data itself never changes.
   function applyTransform() {
-    displayCanvas.style.transform =
+    const t =
       "translate(" + state.panX + "px," + state.panY + "px) " +
       "rotate(" + state.rotation + "deg) " +
       "scale(" + state.zoom + ")";
+    displayCanvas.style.transform = t;
     displayCanvas.style.transformOrigin = "0 0";
+    overlayCanvas.style.transform = t;
+    overlayCanvas.style.transformOrigin = "0 0";
 
     const zoomLabel = (Math.round(state.zoom * 100) / 100) + "\u00d7";
     const rotLabel = Math.round(((state.rotation % 360) + 360) % 360) + "\u00b0";
     statusZoom.innerHTML = "Zoom: <b>" + zoomLabel + "</b> \u00b7 Rotation: <b>" + rotLabel + "</b>";
+
+    renderOverlay();
   }
 
   // ==================== COORDINATE CONVERSION ====================
@@ -288,6 +492,26 @@
 
     state.isDrawing = true;
     state.lastPixel = { x: px, y: py };
+    state.hoverPixel = { x: px, y: py };
+
+    if (state.tool === "select") {
+      const activeRect = state.floating || state.selection;
+      if (activeRect && pointInRect(px, py, activeRect)) {
+        // Clicked inside the existing selection: pick it up (lifting it
+        // to a floating layer the first time) and start dragging it.
+        if (!state.floating) liftSelectionToFloating(state.selection);
+        state.movingSelection = { startX: px, startY: py, origX: state.floating.x, origY: state.floating.y };
+      } else {
+        // Clicked outside: drop any floating selection where it is and
+        // start a brand-new marquee.
+        if (state.floating) commitFloating();
+        state.selecting = { startX: px, startY: py };
+        state.selection = { x: px, y: py, w: 1, h: 1 };
+      }
+      updatePixelStatus(px, py);
+      render();
+      return;
+    }
 
     if (state.tool === "eyedropper") {
       pickColorAt(px, py);
@@ -304,11 +528,30 @@
   function moveDraw(x, y) {
     const c0 = getCanvasCoords(x, y);
     const px = c0.x, py = c0.y;
-    if (px >= 0 && px < state.width && py >= 0 && py < state.height) {
-      updatePixelStatus(px, py);
+    const inBounds = px >= 0 && px < state.width && py >= 0 && py < state.height;
+    state.hoverPixel = inBounds ? { x: px, y: py } : null;
+    if (inBounds) updatePixelStatus(px, py);
+
+    if (!state.isDrawing) {
+      renderOverlay();
+      return;
     }
-    if (!state.isDrawing) return;
-    if (px < 0 || px >= state.width || py < 0 || py >= state.height) return;
+
+    if (state.tool === "select") {
+      if (state.movingSelection) {
+        const dx = px - state.movingSelection.startX;
+        const dy = py - state.movingSelection.startY;
+        state.floating.x = state.movingSelection.origX + dx;
+        state.floating.y = state.movingSelection.origY + dy;
+        render();
+      } else if (state.selecting) {
+        state.selection = normalizeRect(state.selecting.startX, state.selecting.startY, px, py);
+        render();
+      }
+      return;
+    }
+
+    if (!inBounds) return;
 
     if (state.tool === "eyedropper") {
       pickColorAt(px, py);
@@ -330,9 +573,29 @@
   function endDraw() {
     if (!state.isDrawing) return;
     const wasEyedropper = state.tool === "eyedropper";
+    const wasSelect = state.tool === "select";
     state.isDrawing = false;
     state.lastPixel = null;
     state.activePointerId = null;
+
+    if (wasSelect) {
+      if (state.movingSelection) {
+        state.movingSelection = null;
+        commitFloating();
+        saveState();
+        render();
+      } else if (state.selecting) {
+        // A plain click with no drag (still a 1x1 rect) clears the
+        // selection instead of leaving a single-pixel marquee behind.
+        if (state.selection && state.selection.w <= 1 && state.selection.h <= 1) {
+          state.selection = null;
+        }
+        state.selecting = null;
+        render();
+      }
+      return;
+    }
+
     if (wasEyedropper) {
       // Hand control back to whichever paint tool was active before
       // the eyedropper was picked up.
@@ -349,6 +612,8 @@
     state.isDrawing = false;
     state.lastPixel = null;
     state.activePointerId = null;
+    state.selecting = null;
+    state.movingSelection = null;
   }
 
   function updatePixelStatus(x, y) {
@@ -427,7 +692,11 @@
   window.addEventListener("pointerup", onPointerUp);
   window.addEventListener("pointercancel", onPointerUp);
   displayCanvas.addEventListener("pointerleave", function () {
-    if (state.activePointerId === null) statusPixel.textContent = "\u2014";
+    if (state.activePointerId === null) {
+      statusPixel.textContent = "\u2014";
+      state.hoverPixel = null;
+      renderOverlay();
+    }
   });
 
   // ==================== PAN (mouse, right-drag) / ROTATE (mouse, middle-drag) ====================
@@ -814,6 +1083,19 @@
     btnMirrorY.classList.toggle("active", state.mirrorY);
   }
 
+  // ==================== CANVAS AIDS (grid / onion skin) ====================
+  function toggleGrid() {
+    state.showGrid = !state.showGrid;
+    btnGrid.classList.toggle("active", state.showGrid);
+    renderOverlay();
+  }
+
+  function toggleOnionSkin() {
+    state.onionSkin = !state.onionSkin;
+    btnOnion.classList.toggle("active", state.onionSkin);
+    render();
+  }
+
   // ==================== ZOOM / ROTATE / VIEW ====================
   function onZoomChange(e) {
     state.zoom = parseInt(e.target.value, 10);
@@ -1077,6 +1359,7 @@
   // fresh undo history — history isn't shared across frames.
   function goToFrame(index) {
     if (index < 0 || index >= state.frames.length) return;
+    clearSelection();
     state.currentFrame = index;
     state.pixels = state.frames[index];
     state.undoStack = [];
@@ -1324,22 +1607,42 @@
       if (e.key === "p" || e.key === "P") selectTool("pencil");
       else if (e.key === "e" || e.key === "E") selectTool("eraser");
       else if (e.key === "i" || e.key === "I") selectTool("eyedropper");
+      else if (e.key === "s" || e.key === "S") selectTool("select");
+      else if (e.key === "g" || e.key === "G") toggleGrid();
+      else if (e.key === "o" || e.key === "O") toggleOnionSkin();
       else if (e.key === "m" || e.key === "M") toggleMirrorX();
       else if (e.key === "n" || e.key === "N") toggleMirrorY();
       else if (e.key === "[") rotateBy(-15);
       else if (e.key === "]") rotateBy(15);
+      else if (e.key === "Delete" || e.key === "Backspace") {
+        if (state.selection || state.floating) {
+          e.preventDefault();
+          deleteSelectionContents();
+        }
+      } else if (e.key === "Escape") {
+        if (state.selection || state.floating) {
+          clearSelection();
+          render();
+        }
+      }
     }
   }
 
   // ==================== TOOL SELECTION ====================
   function selectTool(tool) {
     if (tool !== "eyedropper") state.lastPaintTool = tool;
+    if (tool !== "select" && state.floating) {
+      commitFloating();
+      saveState();
+    }
     state.tool = tool;
     btnPencil.classList.toggle("active", tool === "pencil");
     btnEraser.classList.toggle("active", tool === "eraser");
     btnEyedropper.classList.toggle("active", tool === "eyedropper");
+    btnSelect.classList.toggle("active", tool === "select");
     canvasWrapper.style.cursor =
       tool === "eraser" ? "cell" : tool === "eyedropper" ? "copy" : "crosshair";
+    render();
   }
 
   // ==================== BRUSH SIZE (shared: pencil + eraser) ====================
@@ -1374,6 +1677,9 @@
   btnPencil.addEventListener("click", function () { selectTool("pencil"); });
   btnEraser.addEventListener("click", function () { selectTool("eraser"); });
   btnEyedropper.addEventListener("click", function () { selectTool("eyedropper"); });
+  btnSelect.addEventListener("click", function () { selectTool("select"); });
+  btnGrid.addEventListener("click", toggleGrid);
+  btnOnion.addEventListener("click", toggleOnionSkin);
   toolbarToggle.addEventListener("click", toggleToolbar);
   btnFramePrev.addEventListener("click", function () { stopPlayback(); goToFrame(state.currentFrame - 1); });
   btnFrameNext.addEventListener("click", function () { stopPlayback(); goToFrame(state.currentFrame + 1); });

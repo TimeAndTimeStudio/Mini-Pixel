@@ -84,6 +84,7 @@
       </div>
       <div id="canvas-wrapper">
         <canvas id="display-canvas"></canvas>
+        <canvas id="overlay-canvas"></canvas>
       </div>
       <div id="bottombar">
         <div class="row icon-row">
@@ -108,6 +109,12 @@
               <path d="M4.5 20.5l1.3-4.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
             </svg>
             <span class="sr-only">Eyedropper</span>
+          </button>
+          <button id="btn-select" class="tool-btn icon-btn" title="Select (S)">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <rect x="4" y="4" width="16" height="16" rx="1" stroke="currentColor" stroke-width="1.6" stroke-dasharray="3 2.5"/>
+            </svg>
+            <span class="sr-only">Select</span>
           </button>
           <span class="topbar-divider"></span>
           <label for="brush-size-number" id="size-label">Size</label>
@@ -220,6 +227,26 @@
               <path d="M8 19l4 3 4-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
             <span class="sr-only">Mirror Y</span>
+          </button>
+        </div>
+      </div>
+      <div class="divider"></div>
+
+      <div class="group" id="canvas-aids-group">
+        <div class="row icon-row">
+          <button id="btn-grid" class="aid-btn icon-btn active" title="Toggle pixel grid (G)">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <rect x="3.5" y="3.5" width="17" height="17" stroke="currentColor" stroke-width="1.4"/>
+              <path d="M9 3.5v17M15 3.5v17M3.5 9h17M3.5 15h17" stroke="currentColor" stroke-width="1.2"/>
+            </svg>
+            <span class="sr-only">Toggle grid</span>
+          </button>
+          <button id="btn-onion" class="aid-btn icon-btn" title="Toggle onion skin (O)">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <circle cx="9.5" cy="12" r="6.5" stroke="currentColor" stroke-width="1.5" opacity="0.55"/>
+              <circle cx="14.5" cy="12" r="6.5" stroke="currentColor" stroke-width="1.5"/>
+            </svg>
+            <span class="sr-only">Toggle onion skin</span>
           </button>
         </div>
       </div>
@@ -352,6 +379,9 @@
           <h2>What can you do here?</h2>
           <ul class="docs-feature-list">
             <li><strong>Draw &amp; erase</strong> — Pencil, Eraser and Eyedropper tools with an adjustable 1–64px brush size, shared between pencil and eraser.</li>
+            <li><strong>Select &amp; move</strong> — drag out a rectangular selection, then drag inside it to pick up and move those pixels around the canvas. <kbd>Delete</kbd> clears the selection, <kbd>Esc</kbd> deselects.</li>
+            <li><strong>Pixel grid</strong> — a 1×1 grid overlay lines up exactly with the pixel buffer, and the cell under your cursor is always highlighted while you draw.</li>
+            <li><strong>Onion skinning</strong> — see a faded blue outline of the previous frame and orange outline of the next frame while you draw, so animated frames line up perfectly.</li>
             <li><strong>Full color control</strong> — a color wheel with a brightness slider, plus a hex input for exact colors.</li>
             <li><strong>Mirror / symmetry drawing</strong> — turn on Mirror X and/or Mirror Y to draw symmetrical sprites and patterns automatically.</li>
             <li><strong>Undo &amp; redo</strong> — full history so you can experiment freely.</li>
@@ -369,6 +399,11 @@
               <tr><td><kbd>P</kbd></td><td>Pencil</td></tr>
               <tr><td><kbd>E</kbd></td><td>Eraser</td></tr>
               <tr><td><kbd>I</kbd></td><td>Eyedropper</td></tr>
+              <tr><td><kbd>S</kbd></td><td>Select</td></tr>
+              <tr><td><kbd>G</kbd></td><td>Toggle pixel grid</td></tr>
+              <tr><td><kbd>O</kbd></td><td>Toggle onion skin</td></tr>
+              <tr><td><kbd>Delete</kbd> / <kbd>Backspace</kbd></td><td>Clear selected pixels</td></tr>
+              <tr><td><kbd>Esc</kbd></td><td>Deselect</td></tr>
               <tr><td><kbd>M</kbd></td><td>Toggle Mirror X</td></tr>
               <tr><td><kbd>N</kbd></td><td>Toggle Mirror Y</td></tr>
               <tr><td><kbd>[</kbd> / <kbd>]</kbd></td><td>Rotate view left / right</td></tr>
