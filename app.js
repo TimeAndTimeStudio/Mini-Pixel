@@ -130,13 +130,9 @@
     displayCanvas.style.width = w + "px";
     displayCanvas.style.height = h + "px";
 
-    overlayCanvas.width = w;
-    overlayCanvas.height = h;
-    overlayCanvas.style.width = w + "px";
-    overlayCanvas.style.height = h + "px";
+    resizeOverlayCanvas();
 
     ctx.imageSmoothingEnabled = false;
-    overlayCtx.imageSmoothingEnabled = false;
 
     state.rotation = 0;
     centerCanvas();
@@ -149,6 +145,27 @@
     statusSize.innerHTML = "Canvas: <b>" + w + " \u00d7 " + h + "</b>";
     updateFrameLabel();
     render();
+  }
+
+  // The overlay canvas (grid / hover / selection) is drawn straight in
+  // screen space rather than riding the display canvas's own CSS
+  // transform: at small canvas sizes (e.g. 64x64) a hairline drawn into
+  // that tiny raster and then scaled up by the transform becomes a
+  // fraction of a raster pixel wide and all but disappears. Sizing the
+  // overlay to the actual on-screen viewport (with a devicePixelRatio
+  // scale for crispness on high-DPI screens) means every line is drawn
+  // at full screen resolution and stays a clean, constant CSS-pixel
+  // width no matter how far zoomed in or out we are.
+  function resizeOverlayCanvas() {
+    const rect = canvasWrapper.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    const cssW = Math.max(1, Math.round(rect.width));
+    const cssH = Math.max(1, Math.round(rect.height));
+    overlayCanvas.width = Math.max(1, Math.round(cssW * dpr));
+    overlayCanvas.height = Math.max(1, Math.round(cssH * dpr));
+    overlayCanvas.style.width = cssW + "px";
+    overlayCanvas.style.height = cssH + "px";
+    overlayCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
   // Positions pan so the canvas's own center sits at the middle of the
@@ -220,7 +237,7 @@
   // Returns the rect (in pixel coords) that the current tool's brush
   // would actually stamp if you clicked at (cx, cy) — mirrors
   // stampBrush()'s own centering math so the hover highlight always
-  // matches what pencil/eraser would draw.
+  // matches what pencil/eraser would draw. Always a square.
   function brushHighlightRect(cx, cy) {
     if ((state.tool === "pencil" || state.tool === "eraser") && state.brushSize > 1) {
       const size = state.brushSize;
@@ -231,50 +248,78 @@
   }
 
   function renderOverlay() {
-    const w = state.width;
-    const h = state.height;
-    overlayCtx.clearRect(0, 0, w, h);
+    const rect = canvasWrapper.getBoundingClientRect();
+    overlayCtx.clearRect(0, 0, rect.width, rect.height);
 
-    const lw = Math.max(0.001, 1 / state.zoom);
+    const w = state.width, h = state.height;
+    const rad = (state.rotation * Math.PI) / 180;
+    const cosR = Math.cos(rad);
+    const sinR = Math.sin(rad);
+    // Local canvas-pixel coords -> screen coords, matching
+    // toScreenOffset()'s math (rotate then scale, plus pan).
+    function toScreen(lx, ly) {
+      return {
+        x: state.panX + state.zoom * (lx * cosR - ly * sinR),
+        y: state.panY + state.zoom * (lx * sinR + ly * cosR),
+      };
+    }
+
+    function pathForLocalRect(r) {
+      const c0 = toScreen(r.x, r.y);
+      const c1 = toScreen(r.x + r.w, r.y);
+      const c2 = toScreen(r.x + r.w, r.y + r.h);
+      const c3 = toScreen(r.x, r.y + r.h);
+      overlayCtx.beginPath();
+      overlayCtx.moveTo(c0.x, c0.y);
+      overlayCtx.lineTo(c1.x, c1.y);
+      overlayCtx.lineTo(c2.x, c2.y);
+      overlayCtx.lineTo(c3.x, c3.y);
+      overlayCtx.closePath();
+    }
 
     if (state.showGrid && state.zoom >= 2) {
-      overlayCtx.strokeStyle = "rgba(255,255,255,0.35)";
-      overlayCtx.lineWidth = lw;
+      overlayCtx.strokeStyle = "rgba(255,255,255,0.4)";
+      overlayCtx.lineWidth = 1;
       overlayCtx.beginPath();
       for (let x = 0; x <= w; x++) {
-        overlayCtx.moveTo(x, 0);
-        overlayCtx.lineTo(x, h);
+        const p1 = toScreen(x, 0), p2 = toScreen(x, h);
+        overlayCtx.moveTo(p1.x, p1.y);
+        overlayCtx.lineTo(p2.x, p2.y);
       }
       for (let y = 0; y <= h; y++) {
-        overlayCtx.moveTo(0, y);
-        overlayCtx.lineTo(w, y);
+        const p1 = toScreen(0, y), p2 = toScreen(w, y);
+        overlayCtx.moveTo(p1.x, p1.y);
+        overlayCtx.lineTo(p2.x, p2.y);
       }
       overlayCtx.stroke();
     }
 
     if (state.hoverPixel && !state.isDrawing) {
       const hr = brushHighlightRect(state.hoverPixel.x, state.hoverPixel.y);
-      const hlw = Math.max(lw, 1.5 / state.zoom);
       // A dark outline under the light one keeps the highlight visible
       // against both light and dark pixel colors underneath it.
-      overlayCtx.strokeStyle = "rgba(0,0,0,0.6)";
-      overlayCtx.lineWidth = hlw * 2;
-      overlayCtx.strokeRect(hr.x, hr.y, hr.w, hr.h);
+      pathForLocalRect(hr);
+      overlayCtx.strokeStyle = "rgba(0,0,0,0.65)";
+      overlayCtx.lineWidth = 3.5;
+      overlayCtx.stroke();
+      pathForLocalRect(hr);
       overlayCtx.strokeStyle = "rgba(255,255,255,0.95)";
-      overlayCtx.lineWidth = hlw;
-      overlayCtx.strokeRect(hr.x, hr.y, hr.w, hr.h);
+      overlayCtx.lineWidth = 1.5;
+      overlayCtx.stroke();
     }
 
     const sel = state.floating
       ? { x: state.floating.x, y: state.floating.y, w: state.floating.w, h: state.floating.h }
       : state.selection;
     if (sel) {
+      pathForLocalRect(sel);
       overlayCtx.fillStyle = "rgba(94,234,212,0.15)";
-      overlayCtx.fillRect(sel.x, sel.y, sel.w, sel.h);
+      overlayCtx.fill();
+      pathForLocalRect(sel);
       overlayCtx.strokeStyle = "rgba(94,234,212,0.95)";
-      overlayCtx.lineWidth = 2 / state.zoom;
-      overlayCtx.setLineDash([4 / state.zoom, 3 / state.zoom]);
-      overlayCtx.strokeRect(sel.x, sel.y, sel.w, sel.h);
+      overlayCtx.lineWidth = 2;
+      overlayCtx.setLineDash([5, 4]);
+      overlayCtx.stroke();
       overlayCtx.setLineDash([]);
     }
   }
@@ -379,8 +424,6 @@
       "scale(" + state.zoom + ")";
     displayCanvas.style.transform = t;
     displayCanvas.style.transformOrigin = "0 0";
-    overlayCanvas.style.transform = t;
-    overlayCanvas.style.transformOrigin = "0 0";
 
     const zoomLabel = (Math.round(state.zoom * 100) / 100) + "\u00d7";
     const rotLabel = Math.round(((state.rotation % 360) + 360) % 360) + "\u00b0";
@@ -1792,6 +1835,16 @@
   colorSwatch.style.background = rgbToHex(state.color.r, state.color.g, state.color.b);
   setupCanvas();
   refreshProjectSelect();
+
+  // Keeps the overlay canvas's own raster matched to the workspace's
+  // actual on-screen size (window resizes, mobile orientation changes,
+  // and the toolbar's animated collapse/expand all resize it).
+  if (window.ResizeObserver) {
+    new ResizeObserver(function () {
+      resizeOverlayCanvas();
+      renderOverlay();
+    }).observe(canvasWrapper);
+  }
 
   window.addEventListener("resize", function () {
     // Keep the canvas roughly centered as the workspace is resized,
