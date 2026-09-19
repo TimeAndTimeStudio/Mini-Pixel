@@ -116,7 +116,6 @@ input[type="number"]{-moz-appearance:textfield;appearance:textfield;}
 }
 #overlay-canvas{
   position:absolute;top:0;left:0;
-  image-rendering:pixelated;image-rendering:crisp-edges;
   pointer-events:none;
 }
 

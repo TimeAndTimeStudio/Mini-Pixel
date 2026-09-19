@@ -217,6 +217,19 @@
   // same CSS transform as the display canvas (see applyTransform), so
   // line widths are given in "1 / zoom" units to stay a crisp ~1 CSS
   // pixel wide on screen no matter how far zoomed in or out we are.
+  // Returns the rect (in pixel coords) that the current tool's brush
+  // would actually stamp if you clicked at (cx, cy) — mirrors
+  // stampBrush()'s own centering math so the hover highlight always
+  // matches what pencil/eraser would draw.
+  function brushHighlightRect(cx, cy) {
+    if ((state.tool === "pencil" || state.tool === "eraser") && state.brushSize > 1) {
+      const size = state.brushSize;
+      const half = Math.floor(size / 2);
+      return { x: cx - half, y: cy - half, w: size, h: size };
+    }
+    return { x: cx, y: cy, w: 1, h: 1 };
+  }
+
   function renderOverlay() {
     const w = state.width;
     const h = state.height;
@@ -224,8 +237,8 @@
 
     const lw = Math.max(0.001, 1 / state.zoom);
 
-    if (state.showGrid && state.zoom >= 4) {
-      overlayCtx.strokeStyle = "rgba(255,255,255,0.16)";
+    if (state.showGrid && state.zoom >= 2) {
+      overlayCtx.strokeStyle = "rgba(255,255,255,0.35)";
       overlayCtx.lineWidth = lw;
       overlayCtx.beginPath();
       for (let x = 0; x <= w; x++) {
@@ -240,13 +253,16 @@
     }
 
     if (state.hoverPixel && !state.isDrawing) {
-      const hx = state.hoverPixel.x;
-      const hy = state.hoverPixel.y;
-      if (hx >= 0 && hx < w && hy >= 0 && hy < h) {
-        overlayCtx.strokeStyle = "rgba(255,255,255,0.9)";
-        overlayCtx.lineWidth = Math.max(lw, 1.5 / state.zoom);
-        overlayCtx.strokeRect(hx + lw / 2, hy + lw / 2, 1 - lw, 1 - lw);
-      }
+      const hr = brushHighlightRect(state.hoverPixel.x, state.hoverPixel.y);
+      const hlw = Math.max(lw, 1.5 / state.zoom);
+      // A dark outline under the light one keeps the highlight visible
+      // against both light and dark pixel colors underneath it.
+      overlayCtx.strokeStyle = "rgba(0,0,0,0.6)";
+      overlayCtx.lineWidth = hlw * 2;
+      overlayCtx.strokeRect(hr.x, hr.y, hr.w, hr.h);
+      overlayCtx.strokeStyle = "rgba(255,255,255,0.95)";
+      overlayCtx.lineWidth = hlw;
+      overlayCtx.strokeRect(hr.x, hr.y, hr.w, hr.h);
     }
 
     const sel = state.floating
@@ -1658,6 +1674,7 @@
     const clamped = Math.max(1, Math.min(64, valid ? parsed : state.brushSize));
     state.brushSize = clamped;
     if (commit) brushSizeNumber.value = clamped;
+    renderOverlay();
   }
   brushSizeNumber.addEventListener("input", function (e) { setBrushSize(e.target.value, false); });
   brushSizeNumber.addEventListener("blur", function () { setBrushSize(brushSizeNumber.value, true); });
