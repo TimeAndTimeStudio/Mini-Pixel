@@ -457,9 +457,13 @@
 
   // Computes the new selection rect while dragging `handle`, given the
   // rect it started from and the current pointer position (in local
-  // pixel coords). When `symmetric` is true (Ctrl held) the rect grows
-  // or shrinks equally in both directions around its original center,
-  // instead of anchored at the opposite edge/corner.
+  // pixel coords). When `symmetric` is true (Ctrl held) the rect keeps
+  // its original aspect ratio and scales uniformly (both width and
+  // height together) around its original center — the same behavior
+  // for corner handles ("nw"/"ne"/"sw"/"se") and edge handles
+  // ("n"/"s"/"e"/"w") alike. When `symmetric` is false, each handle
+  // resizes only the axis/axes it touches, anchored at the opposite
+  // edge/corner (the normal, non-Ctrl behavior).
   function computeResizedRect(handle, origRect, mx, my, symmetric) {
     const left = origRect.x, top = origRect.y;
     const right = origRect.x + origRect.w, bottom = origRect.y + origRect.h;
@@ -474,12 +478,40 @@
 
     let nx = left, ny = top, nw = origRect.w, nh = origRect.h;
 
+    if (symmetric) {
+      // Derive a single uniform scale factor from however far the
+      // pointer has moved along the axis (or axes) this handle
+      // touches, then apply that same factor to both dimensions so
+      // the aspect ratio is preserved. For a corner handle (both axes
+      // affected) use whichever axis implies the larger scale, so the
+      // rect always grows enough to reach the pointer.
+      let scale = 1;
+      if (affectsX && affectsY) {
+        const halfX = isWest ? (cx - mx) : (mx - cx);
+        const halfY = isNorth ? (cy - my) : (my - cy);
+        const scaleX = (halfX * 2) / origRect.w;
+        const scaleY = (halfY * 2) / origRect.h;
+        scale = Math.max(scaleX, scaleY);
+      } else if (affectsX) {
+        const halfX = isWest ? (cx - mx) : (mx - cx);
+        scale = (halfX * 2) / origRect.w;
+      } else if (affectsY) {
+        const halfY = isNorth ? (cy - my) : (my - cy);
+        scale = (halfY * 2) / origRect.h;
+      }
+
+      const minScale = 1 / Math.max(origRect.w, origRect.h);
+      if (scale < minScale) scale = minScale;
+
+      nw = Math.max(1, Math.round(origRect.w * scale));
+      nh = Math.max(1, Math.round(origRect.h * scale));
+      nx = Math.round(cx - nw / 2);
+      ny = Math.round(cy - nh / 2);
+      return { x: nx, y: ny, w: nw, h: nh };
+    }
+
     if (affectsX) {
-      if (symmetric) {
-        const half = isWest ? (cx - mx) : (mx - cx);
-        nw = Math.max(1, Math.round(half * 2));
-        nx = Math.round(cx - nw / 2);
-      } else if (isWest) {
+      if (isWest) {
         nw = Math.max(1, Math.round(right - mx));
         nx = right - nw;
       } else if (isEast) {
@@ -489,11 +521,7 @@
     }
 
     if (affectsY) {
-      if (symmetric) {
-        const half = isNorth ? (cy - my) : (my - cy);
-        nh = Math.max(1, Math.round(half * 2));
-        ny = Math.round(cy - nh / 2);
-      } else if (isNorth) {
+      if (isNorth) {
         nh = Math.max(1, Math.round(bottom - my));
         ny = bottom - nh;
       } else if (isSouth) {
