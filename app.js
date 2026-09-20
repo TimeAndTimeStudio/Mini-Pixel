@@ -30,8 +30,7 @@
     selecting: null, // {startX, startY} while a marquee drag is in progress
     floating: null, // {data, x, y, w, h} the picked-up selection while it's being moved
     movingSelection: null, // {startX, startY, origX, origY} while dragging a floating selection
-    snapEnabled: true, // snap-to-canvas-center/edges + alignment guides while moving a selection
-    snapGuides: null, // {x, y} each 'start' | 'center' | 'end' | null - axes currently aligned
+    resizing: null, // {handle, origRect, origData, origW, origH} while dragging a resize handle
   };
 
   const MIN_ZOOM = 0.5;
@@ -45,7 +44,6 @@
   const btnSelect = document.getElementById("btn-select");
   const btnGrid = document.getElementById("btn-grid");
   const btnOnion = document.getElementById("btn-onion");
-  const btnSnap = document.getElementById("btn-snap");
   const inputWidth = document.getElementById("input-width");
   const inputHeight = document.getElementById("input-height");
   const colorWheel = document.getElementById("color-wheel");
@@ -332,44 +330,21 @@
       overlayCtx.setLineDash([5, 4]);
       overlayCtx.stroke();
       overlayCtx.setLineDash([]);
-    }
 
-    // Placement guides, only while a selection is being dragged.
-    if (state.movingSelection && state.floating && state.snapEnabled) {
-      const f = state.floating;
-      function strokeLine(a, b, style, width, dash) {
-        overlayCtx.beginPath();
-        overlayCtx.moveTo(a.x, a.y);
-        overlayCtx.lineTo(b.x, b.y);
-        overlayCtx.setLineDash(dash || []);
-        overlayCtx.strokeStyle = style;
-        overlayCtx.lineWidth = width;
-        overlayCtx.stroke();
-        overlayCtx.setLineDash([]);
+      // Resize handles: small filled squares at each corner/edge
+      // midpoint, only once there's a settled selection to grab (not
+      // while a fresh marquee is still being dragged out).
+      if (state.tool === "select" && !state.selecting) {
+        const pts = handlePoints(sel);
+        const hs = 6; // handle square half-size, in screen px
+        for (let i = 0; i < HANDLE_NAMES.length; i++) {
+          const p = toScreen(pts[HANDLE_NAMES[i]].x, pts[HANDLE_NAMES[i]].y);
+          overlayCtx.fillStyle = "#0f172a";
+          overlayCtx.fillRect(p.x - hs / 2 - 1, p.y - hs / 2 - 1, hs + 2, hs + 2);
+          overlayCtx.fillStyle = "#5eead4";
+          overlayCtx.fillRect(p.x - hs / 2, p.y - hs / 2, hs, hs);
+        }
       }
-      function vLine(lx, style, width, dash) {
-        strokeLine(toScreen(lx, 0), toScreen(lx, h), "rgba(0,0,0,0.55)", width + 1.5, dash);
-        strokeLine(toScreen(lx, 0), toScreen(lx, h), style, width, dash);
-      }
-      function hLine(ly, style, width, dash) {
-        strokeLine(toScreen(0, ly), toScreen(w, ly), "rgba(0,0,0,0.55)", width + 1.5, dash);
-        strokeLine(toScreen(0, ly), toScreen(w, ly), style, width, dash);
-      }
-      const REF = "rgba(255,255,255,0.55)";
-      const HOT = "rgba(255,79,216,1)";
-      const g = state.snapGuides || {};
-      // Faint dashed reference lines through the canvas center.
-      vLine(w / 2, REF, 1, [4, 4]);
-      hLine(h / 2, REF, 1, [4, 4]);
-      // Lit-up guides for whichever axes are currently aligned.
-      if (g.x) vLine(g.x === "center" ? w / 2 : g.x === "start" ? 0 : w, HOT, 1.5);
-      if (g.y) hLine(g.y === "center" ? h / 2 : g.y === "start" ? 0 : h, HOT, 1.5);
-      // Small cross marking the selection's own center.
-      const c = toScreen(f.x + f.w / 2, f.y + f.h / 2);
-      strokeLine({ x: c.x - 6, y: c.y }, { x: c.x + 6, y: c.y }, "rgba(0,0,0,0.7)", 3.5);
-      strokeLine({ x: c.x, y: c.y - 6 }, { x: c.x, y: c.y + 6 }, "rgba(0,0,0,0.7)", 3.5);
-      strokeLine({ x: c.x - 6, y: c.y }, { x: c.x + 6, y: c.y }, HOT, 1.5);
-      strokeLine({ x: c.x, y: c.y - 6 }, { x: c.x, y: c.y + 6 }, HOT, 1.5);
     }
   }
 
@@ -383,71 +358,6 @@
 
   function pointInRect(px, py, r) {
     return px >= r.x && px < r.x + r.w && py >= r.y && py < r.y + r.h;
-  }
-
-  // ==================== PLACEMENT AIDS (snap + guides) ====================
-  // While a selection is being moved, its position is compared against
-  // the canvas' start edge (0), center and end edge on each axis. Within
-  // a small screen-space threshold it snaps there, and the matching
-  // guide line is lit up in the overlay. Holding Alt bypasses snapping
-  // (guides still light up on an exact match).
-  const SNAP_SCREEN_PX = 8;
-  const SNAP_MAX_CELLS = 6;
-  let altHeld = false;
-
-  function snapAxis(pos, size, canvasSize, allowSnap) {
-    // Candidate positions for the selection's top-left on this axis.
-    const cands = [
-      { kind: "center", v: Math.floor((canvasSize - size) / 2) },
-      { kind: "start", v: 0 },
-      { kind: "end", v: canvasSize - size },
-    ];
-    // Snap radius in canvas cells: ~8 screen px, so it feels the same
-    // at any zoom. At high zoom it collapses to 0 (exact match only).
-    const thr = Math.min(SNAP_MAX_CELLS, Math.floor(SNAP_SCREEN_PX / state.zoom));
-    let out = pos;
-    if (allowSnap) {
-      let best = null;
-      cands.forEach(function (c) {
-        const d = Math.abs(pos - c.v);
-        if (d <= thr && (!best || d < best.d)) best = { d: d, v: c.v };
-      });
-      if (best) out = best.v;
-    }
-    // Which guide (if any) is the final position aligned with?
-    let guide = null;
-    if (Math.abs(2 * out + size - canvasSize) <= 1) guide = "center"; // within half a pixel
-    else if (out === 0) guide = "start";
-    else if (out + size === canvasSize) guide = "end";
-    return { pos: out, guide: guide };
-  }
-
-  function computeMovePlacement(rawX, rawY, f) {
-    const allowSnap = state.snapEnabled && !altHeld;
-    const sx = snapAxis(rawX, f.w, state.width, allowSnap);
-    const sy = snapAxis(rawY, f.h, state.height, allowSnap);
-    return { x: sx.pos, y: sy.pos, guides: state.snapEnabled ? { x: sx.guide, y: sy.guide } : null };
-  }
-
-  function fmtNum(n) {
-    return Number.isInteger(n) ? String(n) : n.toFixed(1);
-  }
-
-  // Status bar readout: position, size, and offset of the selection's
-  // center from the canvas center (0, 0 means perfectly centered).
-  function updateSelectionStatus(r, guides) {
-    const dx = r.x + r.w / 2 - state.width / 2;
-    const dy = r.y + r.h / 2 - state.height / 2;
-    let txt = "Sel (" + r.x + ", " + r.y + ") " + r.w + "\u00d7" + r.h +
-      " \u00b7 end (" + (r.x + r.w) + ", " + (r.y + r.h) + ")" +
-      " \u00b7 center \u0394 (" + fmtNum(dx) + ", " + fmtNum(dy) + ")";
-    if (guides) {
-      const tags = [];
-      if (guides.x === "center") tags.push("X centered");
-      if (guides.y === "center") tags.push("Y centered");
-      if (tags.length) txt += " \u00b7 " + tags.join(", ");
-    }
-    statusPixel.textContent = txt;
   }
 
   // Lifts the pixels inside `rect` off the buffer into a floating
@@ -505,9 +415,122 @@
     state.selection = null;
     state.selecting = null;
     state.movingSelection = null;
-    state.snapGuides = null;
+    state.resizing = null;
     if (hadFloating) saveState();
   }
+
+  // ---- Resize handles ----
+  // Handle names use compass points: corner handles ("nw","ne","sw","se")
+  // resize both axes, edge handles ("n","s","e","w") resize one axis.
+  const HANDLE_NAMES = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
+  const HANDLE_HIT_RADIUS_SCREEN = 7; // px, on screen, independent of zoom
+
+  function handlePoints(rect) {
+    const cx = rect.x + rect.w / 2;
+    const cy = rect.y + rect.h / 2;
+    return {
+      nw: { x: rect.x, y: rect.y },
+      n: { x: cx, y: rect.y },
+      ne: { x: rect.x + rect.w, y: rect.y },
+      e: { x: rect.x + rect.w, y: cy },
+      se: { x: rect.x + rect.w, y: rect.y + rect.h },
+      s: { x: cx, y: rect.y + rect.h },
+      sw: { x: rect.x, y: rect.y + rect.h },
+      w: { x: rect.x, y: cy },
+    };
+  }
+
+  // Hit-tests the resize handles of `rect` against a point in *local*
+  // (canvas-pixel) coordinates. The hit radius is specified in screen
+  // pixels and converted through the current zoom so handles feel the
+  // same size to grab regardless of zoom level.
+  function hitTestHandle(px, py, rect) {
+    const pts = handlePoints(rect);
+    const radius = HANDLE_HIT_RADIUS_SCREEN / state.zoom;
+    for (let i = 0; i < HANDLE_NAMES.length; i++) {
+      const name = HANDLE_NAMES[i];
+      const p = pts[name];
+      if (Math.abs(px - p.x) <= radius && Math.abs(py - p.y) <= radius) return name;
+    }
+    return null;
+  }
+
+  // Computes the new selection rect while dragging `handle`, given the
+  // rect it started from and the current pointer position (in local
+  // pixel coords). When `symmetric` is true (Ctrl held) the rect grows
+  // or shrinks equally in both directions around its original center,
+  // instead of anchored at the opposite edge/corner.
+  function computeResizedRect(handle, origRect, mx, my, symmetric) {
+    const left = origRect.x, top = origRect.y;
+    const right = origRect.x + origRect.w, bottom = origRect.y + origRect.h;
+    const cx = origRect.x + origRect.w / 2, cy = origRect.y + origRect.h / 2;
+
+    const affectsX = handle.indexOf("w") !== -1 || handle.indexOf("e") !== -1;
+    const affectsY = handle.indexOf("n") !== -1 || handle.indexOf("s") !== -1;
+    const isWest = handle.indexOf("w") !== -1;
+    const isEast = handle.indexOf("e") !== -1;
+    const isNorth = handle.indexOf("n") !== -1;
+    const isSouth = handle.indexOf("s") !== -1;
+
+    let nx = left, ny = top, nw = origRect.w, nh = origRect.h;
+
+    if (affectsX) {
+      if (symmetric) {
+        const half = isWest ? (cx - mx) : (mx - cx);
+        nw = Math.max(1, Math.round(half * 2));
+        nx = Math.round(cx - nw / 2);
+      } else if (isWest) {
+        nw = Math.max(1, Math.round(right - mx));
+        nx = right - nw;
+      } else if (isEast) {
+        nw = Math.max(1, Math.round(mx - left));
+        nx = left;
+      }
+    }
+
+    if (affectsY) {
+      if (symmetric) {
+        const half = isNorth ? (cy - my) : (my - cy);
+        nh = Math.max(1, Math.round(half * 2));
+        ny = Math.round(cy - nh / 2);
+      } else if (isNorth) {
+        nh = Math.max(1, Math.round(bottom - my));
+        ny = bottom - nh;
+      } else if (isSouth) {
+        nh = Math.max(1, Math.round(my - top));
+        ny = top;
+      }
+    }
+
+    return { x: nx, y: ny, w: nw, h: nh };
+  }
+
+  // Nearest-neighbor resample of RGBA pixel data from one size to
+  // another — keeps the crisp, blocky look pixel art needs (no
+  // smoothing/blurring like a bilinear resize would introduce).
+  function scalePixelData(src, sw, sh, dw, dh) {
+    const out = new Uint8Array(dw * dh * 4);
+    for (let y = 0; y < dh; y++) {
+      const sy = Math.min(sh - 1, Math.floor((y * sh) / dh));
+      for (let x = 0; x < dw; x++) {
+        const sx = Math.min(sw - 1, Math.floor((x * sw) / dw));
+        const si = (sy * sw + sx) * 4;
+        const di = (y * dw + x) * 4;
+        out[di] = src[si];
+        out[di + 1] = src[si + 1];
+        out[di + 2] = src[si + 2];
+        out[di + 3] = src[si + 3];
+      }
+    }
+    return out;
+  }
+
+  const HANDLE_CURSORS = {
+    nw: "nwse-resize", se: "nwse-resize",
+    ne: "nesw-resize", sw: "nesw-resize",
+    n: "ns-resize", s: "ns-resize",
+    e: "ew-resize", w: "ew-resize",
+  };
 
   // Erases the pixels under the current selection (Delete/Backspace).
   function deleteSelectionContents() {
@@ -662,15 +685,35 @@
     stopPlayback();
     const c0 = getCanvasCoords(x, y);
     const px = c0.x, py = c0.y;
-    if (px < 0 || px >= state.width || py < 0 || py >= state.height) return;
-
-    state.isDrawing = true;
-    state.lastPixel = { x: px, y: py };
-    state.hoverPixel = { x: px, y: py };
+    const inBounds = px >= 0 && px < state.width && py >= 0 && py < state.height;
 
     if (state.tool === "select") {
       const activeRect = state.floating || state.selection;
-      if (activeRect && pointInRect(px, py, activeRect)) {
+      const handle = activeRect ? hitTestHandle(px, py, activeRect) : null;
+      const insideActive = !!activeRect && pointInRect(px, py, activeRect);
+      // Starting a brand-new marquee requires clicking on the canvas;
+      // grabbing a handle or dragging the existing selection is fine
+      // even if the pointer strays slightly past the edge.
+      if (!handle && !insideActive && !inBounds) return;
+
+      state.isDrawing = true;
+      state.lastPixel = { x: px, y: py };
+      state.hoverPixel = inBounds ? { x: px, y: py } : null;
+
+      if (activeRect && handle) {
+        // Grabbed a resize handle: lift the selection to floating (if
+        // it isn't already) and remember its original pixels/rect so
+        // every subsequent resize step resamples from a clean source
+        // instead of compounding blur from repeated resizing.
+        if (!state.floating) liftSelectionToFloating(state.selection);
+        state.resizing = {
+          handle: handle,
+          origRect: { x: state.floating.x, y: state.floating.y, w: state.floating.w, h: state.floating.h },
+          origData: state.floating.data,
+          origW: state.floating.w,
+          origH: state.floating.h,
+        };
+      } else if (insideActive) {
         // Clicked inside the existing selection: pick it up (lifting it
         // to a floating layer the first time) and start dragging it.
         if (!state.floating) liftSelectionToFloating(state.selection);
@@ -682,10 +725,16 @@
         state.selecting = { startX: px, startY: py };
         state.selection = { x: px, y: py, w: 1, h: 1 };
       }
-      updatePixelStatus(px, py);
+      if (inBounds) updatePixelStatus(px, py);
       render();
       return;
     }
+
+    if (!inBounds) return;
+
+    state.isDrawing = true;
+    state.lastPixel = { x: px, y: py };
+    state.hoverPixel = { x: px, y: py };
 
     if (state.tool === "eyedropper") {
       pickColorAt(px, py);
@@ -699,7 +748,7 @@
     render();
   }
 
-  function moveDraw(x, y) {
+  function moveDraw(x, y, ctrlKey) {
     const c0 = getCanvasCoords(x, y);
     const px = c0.x, py = c0.y;
     const inBounds = px >= 0 && px < state.width && py >= 0 && py < state.height;
@@ -707,28 +756,35 @@
     if (inBounds) updatePixelStatus(px, py);
 
     if (!state.isDrawing) {
+      if (state.tool === "select") {
+        const activeRect = state.floating || state.selection;
+        const handle = activeRect ? hitTestHandle(px, py, activeRect) : null;
+        canvasWrapper.style.cursor = handle
+          ? HANDLE_CURSORS[handle]
+          : (activeRect && pointInRect(px, py, activeRect) ? "move" : "crosshair");
+      }
       renderOverlay();
       return;
     }
 
     if (state.tool === "select") {
-      if (state.movingSelection) {
+      if (state.resizing) {
+        const r = state.resizing;
+        const newRect = computeResizedRect(r.handle, r.origRect, px, py, !!ctrlKey);
+        state.floating = {
+          data: scalePixelData(r.origData, r.origW, r.origH, newRect.w, newRect.h),
+          x: newRect.x, y: newRect.y, w: newRect.w, h: newRect.h,
+        };
+        render();
+      } else if (state.movingSelection) {
         const dx = px - state.movingSelection.startX;
         const dy = py - state.movingSelection.startY;
-        const placed = computeMovePlacement(
-          state.movingSelection.origX + dx,
-          state.movingSelection.origY + dy,
-          state.floating
-        );
-        state.floating.x = placed.x;
-        state.floating.y = placed.y;
-        state.snapGuides = placed.guides;
+        state.floating.x = state.movingSelection.origX + dx;
+        state.floating.y = state.movingSelection.origY + dy;
         render();
-        updateSelectionStatus(state.floating, placed.guides);
       } else if (state.selecting) {
         state.selection = normalizeRect(state.selecting.startX, state.selecting.startY, px, py);
         render();
-        updateSelectionStatus(state.selection, null);
       }
       return;
     }
@@ -761,9 +817,13 @@
     state.activePointerId = null;
 
     if (wasSelect) {
-      if (state.movingSelection) {
+      if (state.resizing) {
+        state.resizing = null;
+        commitFloating();
+        saveState();
+        render();
+      } else if (state.movingSelection) {
         state.movingSelection = null;
-        state.snapGuides = null;
         commitFloating();
         saveState();
         render();
@@ -797,7 +857,7 @@
     state.activePointerId = null;
     state.selecting = null;
     state.movingSelection = null;
-    state.snapGuides = null;
+    state.resizing = null;
   }
 
   function updatePixelStatus(x, y) {
@@ -850,7 +910,7 @@
       pendingTouch.y = e.clientY;
     }
     if (state.activePointerId !== null && e.pointerId !== state.activePointerId) return;
-    moveDraw(e.clientX, e.clientY);
+    moveDraw(e.clientX, e.clientY, e.ctrlKey);
   }
 
   function onPointerUp(e) {
@@ -1271,13 +1331,6 @@
   function toggleGrid() {
     state.showGrid = !state.showGrid;
     btnGrid.classList.toggle("active", state.showGrid);
-    renderOverlay();
-  }
-
-  function toggleSnap() {
-    state.snapEnabled = !state.snapEnabled;
-    if (!state.snapEnabled) state.snapGuides = null;
-    btnSnap.classList.toggle("active", state.snapEnabled);
     renderOverlay();
   }
 
@@ -1801,7 +1854,6 @@
       else if (e.key === "s" || e.key === "S") selectTool("select");
       else if (e.key === "g" || e.key === "G") toggleGrid();
       else if (e.key === "o" || e.key === "O") toggleOnionSkin();
-      else if (e.key === "c" || e.key === "C") toggleSnap();
       else if (e.key === "m" || e.key === "M") toggleMirrorX();
       else if (e.key === "n" || e.key === "N") toggleMirrorY();
       else if (e.key === "[") rotateBy(-15);
@@ -1873,12 +1925,6 @@
   btnSelect.addEventListener("click", function () { selectTool("select"); });
   btnGrid.addEventListener("click", toggleGrid);
   btnOnion.addEventListener("click", toggleOnionSkin);
-  btnSnap.addEventListener("click", toggleSnap);
-
-  // Alt bypasses snapping while a selection is being dragged.
-  window.addEventListener("keydown", function (e) { if (e.key === "Alt") altHeld = true; });
-  window.addEventListener("keyup", function (e) { if (e.key === "Alt") altHeld = false; });
-  window.addEventListener("blur", function () { altHeld = false; });
   toolbarToggle.addEventListener("click", toggleToolbar);
   btnFramePrev.addEventListener("click", function () { stopPlayback(); goToFrame(state.currentFrame - 1); });
   btnFrameNext.addEventListener("click", function () { stopPlayback(); goToFrame(state.currentFrame + 1); });

@@ -248,14 +248,6 @@
             </svg>
             <span class="sr-only">Toggle onion skin</span>
           </button>
-          <button id="btn-snap" class="aid-btn icon-btn active" title="Toggle snap &amp; center guides for moving a selection (C) — hold Alt to bypass snapping">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <rect x="3.5" y="3.5" width="17" height="17" stroke="currentColor" stroke-width="1.4" opacity="0.55"/>
-              <path d="M12 3.5v17M3.5 12h17" stroke="currentColor" stroke-width="1.4" stroke-dasharray="2 2"/>
-              <circle cx="12" cy="12" r="2.4" fill="currentColor"/>
-            </svg>
-            <span class="sr-only">Toggle snap and center guides</span>
-          </button>
         </div>
       </div>
       <div class="group" id="size-group">
@@ -387,8 +379,7 @@
           <h2>What can you do here?</h2>
           <ul class="docs-feature-list">
             <li><strong>Draw &amp; erase</strong> — Pencil, Eraser and Eyedropper tools with an adjustable 1–64px brush size, shared between pencil and eraser.</li>
-            <li><strong>Select &amp; move</strong> — drag out a rectangular selection, then drag inside it to pick up and move those pixels around the canvas. <kbd>Delete</kbd> clears the selection, <kbd>Esc</kbd> deselects.</li>
-            <li><strong>Snap &amp; center guides</strong> — while moving a selection, it snaps to the canvas' center and edges, lit-up guide lines show what it's aligned with, and the status bar shows its position and how far its center is from the canvas center. Hold <kbd>Alt</kbd> to move freely; press <kbd>C</kbd> to turn the guides off.</li>
+            <li><strong>Select &amp; move</strong> — drag out a rectangular selection, then drag inside it to pick up and move those pixels around the canvas. Drag one of the small handles at its corners/edges to resize it (nearest-neighbor scaling); hold <kbd>Ctrl</kbd> while resizing to scale symmetrically around the selection's center. <kbd>Delete</kbd> clears the selection, <kbd>Esc</kbd> deselects.</li>
             <li><strong>Pixel grid</strong> — a 1×1 grid overlay lines up exactly with the pixel buffer, and the cell under your cursor is always highlighted while you draw.</li>
             <li><strong>Onion skinning</strong> — see a faded blue outline of the previous frame and orange outline of the next frame while you draw, so animated frames line up perfectly.</li>
             <li><strong>Full color control</strong> — a color wheel with a brightness slider, plus a hex input for exact colors.</li>
@@ -411,8 +402,6 @@
               <tr><td><kbd>S</kbd></td><td>Select</td></tr>
               <tr><td><kbd>G</kbd></td><td>Toggle pixel grid</td></tr>
               <tr><td><kbd>O</kbd></td><td>Toggle onion skin</td></tr>
-              <tr><td><kbd>C</kbd></td><td>Toggle snap &amp; center guides</td></tr>
-              <tr><td><kbd>Alt</kbd> (while dragging a selection)</td><td>Move without snapping</td></tr>
               <tr><td><kbd>Delete</kbd> / <kbd>Backspace</kbd></td><td>Clear selected pixels</td></tr>
               <tr><td><kbd>Esc</kbd></td><td>Deselect</td></tr>
               <tr><td><kbd>M</kbd></td><td>Toggle Mirror X</td></tr>
