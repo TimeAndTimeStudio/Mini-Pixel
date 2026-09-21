@@ -216,6 +216,7 @@ button.icon-btn .icon{width:16px;height:16px;}
 .mirror-btn.active{
   background:var(--ink-600);border-color:var(--accent-strong);color:var(--accent-ink);
 }
+#btn-scale-center.hidden{display:none !important;}
 .aid-btn.active{
   background:var(--ink-600);border-color:var(--accent-strong);color:var(--accent-ink);
 }

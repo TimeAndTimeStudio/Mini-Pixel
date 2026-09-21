@@ -116,6 +116,16 @@
             </svg>
             <span class="sr-only">Select</span>
           </button>
+          <button id="btn-scale-center" class="mirror-btn icon-btn hidden" title="Scale from center (Ctrl) — keeps proportions while resizing a selection" aria-pressed="false">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <rect x="9" y="9" width="6" height="6" stroke="currentColor" stroke-width="1.6"/>
+              <path d="M9 9L4 4M4 8V4h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M15 9l5-5M16 4h4v4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M9 15l-5 5M4 16v4h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M15 15l5 5M16 20h4v-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span class="sr-only">Scale from center</span>
+          </button>
           <span class="topbar-divider"></span>
           <label for="brush-size-number" id="size-label">Size</label>
           <input type="number" id="brush-size-number" min="1" max="64" value="1" title="Brush size in pixels">
@@ -379,7 +389,7 @@
           <h2>What can you do here?</h2>
           <ul class="docs-feature-list">
             <li><strong>Draw &amp; erase</strong> — Pencil, Eraser and Eyedropper tools with an adjustable 1–64px brush size, shared between pencil and eraser.</li>
-            <li><strong>Select &amp; move</strong> — drag out a rectangular selection, then drag inside it to pick up and move those pixels around the canvas. Drag one of the small handles at its corners/edges to resize it (nearest-neighbor scaling); hold <kbd>Ctrl</kbd> while resizing to scale symmetrically around the selection's center. <kbd>Delete</kbd> clears the selection, <kbd>Esc</kbd> deselects.</li>
+            <li><strong>Select &amp; move</strong> — drag out a rectangular selection, then drag inside it to pick up and move those pixels around the canvas. Drag one of the small handles at its corners/edges to resize it (nearest-neighbor scaling); hold <kbd>Ctrl</kbd> while resizing to scale symmetrically around the selection's center — on touch devices, tap the <em>Scale from center</em> button that appears next to the Select tool to turn the same mode on or off. <kbd>Delete</kbd> clears the selection, <kbd>Esc</kbd> deselects.</li>
             <li><strong>Pixel grid</strong> — a 1×1 grid overlay lines up exactly with the pixel buffer, and the cell under your cursor is always highlighted while you draw.</li>
             <li><strong>Onion skinning</strong> — see a faded blue outline of the previous frame and orange outline of the next frame while you draw, so animated frames line up perfectly.</li>
             <li><strong>Full color control</strong> — a color wheel with a brightness slider, plus a hex input for exact colors.</li>

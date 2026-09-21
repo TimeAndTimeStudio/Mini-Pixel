@@ -11,6 +11,7 @@
     tool: "pencil",
     lastPaintTool: "pencil", // remembers pencil/eraser so the eyedropper can hand control back
     color: { r: 94, g: 234, b: 212, a: 255 },
+    scaleFromCenter: false, // touch-friendly stand-in for holding Ctrl while resizing a selection
     mirrorX: false,
     mirrorY: false,
     zoom: 4,
@@ -67,6 +68,8 @@
   const btnFrameExport = document.getElementById("btn-frame-export");
   const btnFramePlay = document.getElementById("btn-frame-play");
   const fpsInput = document.getElementById("fps-input");
+  const COARSE_POINTER = window.matchMedia("(pointer: coarse)");
+  const btnScaleCenter = document.getElementById("btn-scale-center");
   const btnMirrorX = document.getElementById("btn-mirror-x");
   const btnMirrorY = document.getElementById("btn-mirror-y");
   const btnNew = document.getElementById("btn-new");
@@ -336,7 +339,7 @@
       // while a fresh marquee is still being dragged out).
       if (state.tool === "select" && !state.selecting) {
         const pts = handlePoints(sel);
-        const hs = 6; // handle square half-size, in screen px
+        const hs = COARSE_POINTER.matches ? 10 : 6; // handle square size, in screen px
         for (let i = 0; i < HANDLE_NAMES.length; i++) {
           const p = toScreen(pts[HANDLE_NAMES[i]].x, pts[HANDLE_NAMES[i]].y);
           overlayCtx.fillStyle = "#0f172a";
@@ -423,7 +426,8 @@
   // Handle names use compass points: corner handles ("nw","ne","sw","se")
   // resize both axes, edge handles ("n","s","e","w") resize one axis.
   const HANDLE_NAMES = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
-  const HANDLE_HIT_RADIUS_SCREEN = 7; // px, on screen, independent of zoom
+  const HANDLE_HIT_RADIUS_SCREEN = 7; // px, on screen, independent of zoom (mouse)
+  const HANDLE_HIT_RADIUS_TOUCH = 18; // px, larger target for fingers
 
   function handlePoints(rect) {
     const cx = rect.x + rect.w / 2;
@@ -446,13 +450,25 @@
   // same size to grab regardless of zoom level.
   function hitTestHandle(px, py, rect) {
     const pts = handlePoints(rect);
-    const radius = HANDLE_HIT_RADIUS_SCREEN / state.zoom;
+    // Fingers need a much bigger target than a mouse cursor.
+    const base = COARSE_POINTER.matches ? HANDLE_HIT_RADIUS_TOUCH : HANDLE_HIT_RADIUS_SCREEN;
+    // On a small selection the handles would otherwise swallow the
+    // whole interior and make it impossible to drag the selection,
+    // so cap the radius relative to the selection's on-screen size.
+    const minSideScreen = Math.min(rect.w, rect.h) * state.zoom;
+    const radiusScreen = Math.min(base, Math.max(5, minSideScreen * 0.3));
+    const radius = radiusScreen / state.zoom;
+    let best = null, bestDist = Infinity;
     for (let i = 0; i < HANDLE_NAMES.length; i++) {
       const name = HANDLE_NAMES[i];
       const p = pts[name];
-      if (Math.abs(px - p.x) <= radius && Math.abs(py - p.y) <= radius) return name;
+      const dx = Math.abs(px - p.x), dy = Math.abs(py - p.y);
+      if (dx <= radius && dy <= radius) {
+        const d = dx * dx + dy * dy;
+        if (d < bestDist) { bestDist = d; best = name; }
+      }
     }
-    return null;
+    return best;
   }
 
   // Computes the new selection rect while dragging `handle`, given the
@@ -798,7 +814,7 @@
     if (state.tool === "select") {
       if (state.resizing) {
         const r = state.resizing;
-        const newRect = computeResizedRect(r.handle, r.origRect, px, py, !!ctrlKey);
+        const newRect = computeResizedRect(r.handle, r.origRect, px, py, !!ctrlKey || state.scaleFromCenter);
         state.floating = {
           data: scalePixelData(r.origData, r.origW, r.origH, newRect.w, newRect.h),
           x: newRect.x, y: newRect.y, w: newRect.w, h: newRect.h,
@@ -1343,6 +1359,13 @@
   }
   hexInput.addEventListener("change", onHexInput);
   hexInput.addEventListener("blur", onHexInput);
+
+  // ==================== SCALE FROM CENTER (touch stand-in for Ctrl) ====================
+  function setScaleFromCenter(on) {
+    state.scaleFromCenter = !!on;
+    btnScaleCenter.classList.toggle("active", state.scaleFromCenter);
+    btnScaleCenter.setAttribute("aria-pressed", state.scaleFromCenter ? "true" : "false");
+  }
 
   // ==================== MIRROR ====================
   function toggleMirrorX() {
@@ -1912,6 +1935,7 @@
     btnEraser.classList.toggle("active", tool === "eraser");
     btnEyedropper.classList.toggle("active", tool === "eyedropper");
     btnSelect.classList.toggle("active", tool === "select");
+    btnScaleCenter.classList.toggle("hidden", tool !== "select");
     canvasWrapper.style.cursor =
       tool === "eraser" ? "cell" : tool === "eyedropper" ? "copy" : "crosshair";
     render();
@@ -1966,6 +1990,7 @@
     restartPlaybackTimer();
   });
   fpsInput.addEventListener("input", restartPlaybackTimer);
+  btnScaleCenter.addEventListener("click", function () { setScaleFromCenter(!state.scaleFromCenter); });
   btnMirrorX.addEventListener("click", toggleMirrorX);
   btnMirrorY.addEventListener("click", toggleMirrorY);
   btnNew.addEventListener("click", createNewCanvas);
